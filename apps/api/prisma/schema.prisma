@@ -1,0 +1,674 @@
+// Ver docs/architecture/decisions/0001-clean-architecture.md e
+// docs/architecture/decisions/0010-identity-module-architecture.md.
+// O model SchemaBootstrap existia só para o Prisma Client poder ser gerado
+// antes do primeiro model de negócio — não é mais necessário.
+
+generator client {
+  provider = "prisma-client-js"
+  // "native" mantém o dev local funcionando (Windows/macOS/Linux, o que for);
+  // "linux-musl-openssl-3.0.x" é o binário certo para node:24-alpine em
+  // runtime — o Alpine atual vem com OpenSSL 3.x, não 1.1 (a detecção
+  // automática do Prisma dentro do container falhava e chutava 1.1.x, que
+  // não existe na imagem, causando "Error loading shared library
+  // libssl.so.1.1: No such file or directory").
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum AccountStatus {
+  ACTIVE
+  LOCKED
+  DISABLED
+}
+
+/// Ator que autentica na plataforma (ex.: analista de uma empresa cliente).
+/// Não confundir com Pessoa/Empresa (o sujeito consultado — bounded context
+/// futuro, sem relação com este).
+model User {
+  id                  String        @id @default(uuid())
+  email               String        @unique
+  passwordHash        String        @map("password_hash")
+  /// Enum fechado (ver Role em domain/value-objects) — sem tabela própria
+  /// nesta fase (papéis não são gerenciáveis dinamicamente ainda).
+  roles               String[]
+  accountStatus       AccountStatus @default(ACTIVE) @map("account_status")
+  failedLoginAttempts Int           @default(0) @map("failed_login_attempts")
+  lockedUntil         DateTime?     @map("locked_until")
+  mfaEnabled          Boolean       @default(false) @map("mfa_enabled")
+  /// Campos de perfil (fase de polimento UX/UI) — todos opcionais/nulos por
+  /// padrão de propósito: usuários criados via seed antes desta fase
+  /// continuam válidos sem nenhuma migração de dado.
+  nome                String?
+  sobrenome           String?
+  empresa             String?
+  cargo               String?
+  avatarUrl           String?       @map("avatar_url")
+  /// Distinto de `updatedAt` (que muda em qualquer alteração, ex.: troca de
+  /// senha) — só é tocado em login bem-sucedido, ver `recordSuccessfulLogin`.
+  lastLoginAt         DateTime?     @map("last_login_at")
+  createdAt           DateTime      @default(now()) @map("created_at")
+  updatedAt           DateTime      @updatedAt @map("updated_at")
+  sessions            Session[]
+  passwordResetTokens PasswordResetToken[]
+
+  @@map("users")
+}
+
+/// Uma linha por token emitido (não só o atual, mesmo padrão de auditabilidade
+/// do RefreshToken) — `usedAt` marca consumo; um token usado nunca é aceito de
+/// novo, mesmo dentro da validade.
+model PasswordResetToken {
+  id        String    @id @default(uuid())
+  userId    String    @map("user_id")
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@map("password_reset_tokens")
+}
+
+enum SessionStatus {
+  ACTIVE
+  REVOKED
+  EXPIRED
+}
+
+model Session {
+  id            String         @id @default(uuid())
+  userId        String         @map("user_id")
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status        SessionStatus  @default(ACTIVE)
+  userAgent     String?        @map("user_agent")
+  ipAddress     String?        @map("ip_address")
+  createdAt     DateTime       @default(now()) @map("created_at")
+  lastUsedAt    DateTime       @default(now()) @map("last_used_at")
+  expiresAt     DateTime       @map("expires_at")
+  refreshTokens RefreshToken[]
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+/// Uma linha por token emitido (não só o atual) — a cadeia via
+/// `replacedByTokenId` é o que viabiliza detecção de reuso na rotação.
+model RefreshToken {
+  id        String    @id @default(uuid())
+  sessionId String    @map("session_id")
+  session   Session   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique @map("token_hash")
+  familyId  String    @map("family_id")
+  issuedAt  DateTime  @default(now()) @map("issued_at")
+  expiresAt DateTime  @map("expires_at")
+  revokedAt DateTime? @map("revoked_at")
+  /// Referência solta (sem @relation) de propósito: é só um marcador de
+  /// linhagem, não precisa de integridade referencial no nível do Prisma.
+  replacedByTokenId String? @map("replaced_by_token_id")
+
+  @@index([familyId])
+  @@map("refresh_tokens")
+}
+
+enum AuditOutcome {
+  SUCCESS
+  FAILURE
+}
+
+/// Append-only por design: nenhum use case deve fazer update/delete aqui.
+/// actorUserId é referência solta (sem @relation) para o registro sobreviver
+/// mesmo que o usuário seja removido no futuro.
+model AuditLogEntry {
+  id          String       @id @default(uuid())
+  occurredAt  DateTime     @default(now()) @map("occurred_at")
+  actorUserId String?      @map("actor_user_id")
+  eventType   String       @map("event_type")
+  outcome     AuditOutcome
+  ipAddress   String?      @map("ip_address")
+  userAgent   String?      @map("user_agent")
+  metadata    Json?
+
+  @@index([actorUserId, occurredAt])
+  @@map("audit_log_entries")
+}
+
+/// Sujeito consultado pela plataforma (pessoa física) — bounded context
+/// `party` (ver docs/architecture/decisions/0011). Sem relação com `User`
+/// (o ator que autentica, em identity).
+model Pessoa {
+  id           String                   @id @default(uuid())
+  cpf          String                   @unique
+  nome         String
+  createdAt    DateTime                 @default(now()) @map("created_at")
+  updatedAt    DateTime                 @updatedAt @map("updated_at")
+  participacoes ParticipacaoSocietaria[]
+
+  @@map("pessoas")
+}
+
+/// Sujeito consultado pela plataforma (pessoa jurídica) — bounded context
+/// `party`. A relação com `Pessoa` existe só via `ParticipacaoSocietaria`
+/// (agregado próprio, ver ADR 0012) — nunca um campo direto aqui.
+model Empresa {
+  id            String                   @id @default(uuid())
+  cnpj          String                   @unique
+  razaoSocial   String                   @map("razao_social")
+  createdAt     DateTime                 @default(now()) @map("created_at")
+  updatedAt     DateTime                 @updatedAt @map("updated_at")
+  participacoes ParticipacaoSocietaria[]
+
+  @@map("empresas")
+}
+
+enum PapelSocietario {
+  SOCIO
+  ADMINISTRADOR
+  SOCIO_ADMINISTRADOR
+}
+
+/// Vínculo societário entre uma Pessoa (sócio) e uma Empresa — preparação
+/// para futura consulta ao QSA da Receita Federal (ver ADR 0012). Agregado
+/// próprio: referencia Pessoa/Empresa por FK, mas o domínio (`ParticipacaoSocietaria`)
+/// nunca carrega os objetos, só os ids.
+model ParticipacaoSocietaria {
+  id                     String          @id @default(uuid())
+  pessoaId               String          @map("pessoa_id")
+  pessoa                 Pessoa          @relation(fields: [pessoaId], references: [id], onDelete: Cascade)
+  empresaId              String          @map("empresa_id")
+  empresa                Empresa         @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  papel                  PapelSocietario
+  percentualParticipacao Decimal?        @map("percentual_participacao") @db.Decimal(5, 2)
+  dataEntrada            DateTime?       @map("data_entrada")
+  dataSaida              DateTime?       @map("data_saida")
+  createdAt              DateTime        @default(now()) @map("created_at")
+  updatedAt              DateTime        @updatedAt @map("updated_at")
+
+  @@index([pessoaId])
+  @@index([empresaId])
+  @@map("participacoes_societarias")
+}
+
+enum DossieSubjectType {
+  PESSOA
+  EMPRESA
+}
+
+/// Perfil consultável de uma Pessoa ou Empresa, agregando evidências de até
+/// cinco fontes externas (ver ADR 0015) — nenhuma integrada ainda. Cada
+/// evidência é armazenada como JSON porque `Evidence<T>` é uma union
+/// discriminada (formato varia por status), não uma linha relacional fixa.
+/// `subjectId` é referência solta (sem @relation): pode apontar para
+/// `Pessoa.id` OU `Empresa.id` dependendo de `subjectType` — Prisma não tem
+/// relação polimórfica nativa, e a integridade referencial aqui é
+/// responsabilidade do use case (`CreateDossieUseCase`), não do banco.
+model Dossie {
+  id                           String            @id @default(uuid())
+  subjectType                  DossieSubjectType @map("subject_type")
+  subjectId                    String            @map("subject_id")
+  geradoEm                     DateTime          @map("gerado_em")
+  evidenciaPgfn                Json              @map("evidencia_pgfn")
+  evidenciaDataJud              Json              @map("evidencia_data_jud")
+  evidenciaReceitaFederal       Json              @map("evidencia_receita_federal")
+  evidenciaPortalTransparencia  Json              @map("evidencia_portal_transparencia")
+  evidenciaCenprot             Json              @map("evidencia_cenprot")
+  createdAt                    DateTime          @default(now()) @map("created_at")
+  updatedAt                    DateTime          @updatedAt @map("updated_at")
+
+  @@index([subjectType, subjectId])
+  @@map("dossies")
+}
+
+enum ImportRowStatus {
+  IMPORTADA
+  IGNORADA
+  INVALIDA
+  DUPLICADA
+  ERRO
+}
+
+enum ImportResolutionStatus {
+  PENDENTE
+  RESOLVIDA
+  SEM_CORRESPONDENCIA
+}
+
+/// Etapa 15 (Import Excel Enterprise, ADR 0034) — ciclo de vida do lote
+/// depois de concluído. `REVERTIDO` nunca apaga `ImportRow` (auditabilidade
+/// total); só sinaliza que o lote não deve mais ser considerado
+/// operacionalmente válido.
+enum ImportBatchStatus {
+  CONCLUIDO
+  REVERTIDO
+}
+
+/// Um lote de importação (um upload = um lote). Contadores agregados ficam
+/// aqui; o detalhe de cada linha vive em `ImportRow` (ver ADR 0019).
+model ImportBatch {
+  id              String            @id @default(uuid())
+  fonte           String
+  nomeArquivo     String            @map("nome_arquivo")
+  iniciadoEm      DateTime          @map("iniciado_em")
+  finalizadoEm    DateTime?         @map("finalizado_em")
+  totalLinhas     Int               @map("total_linhas")
+  totalImportadas Int               @default(0) @map("total_importadas")
+  totalIgnoradas  Int               @default(0) @map("total_ignoradas")
+  totalInvalidas  Int               @default(0) @map("total_invalidas")
+  totalDuplicadas Int               @default(0) @map("total_duplicadas")
+  totalErros      Int               @default(0) @map("total_erros")
+  status          ImportBatchStatus @default(CONCLUIDO)
+  revertidoEm     DateTime?         @map("revertido_em")
+  motivoReversao  String?           @map("motivo_reversao")
+  createdAt       DateTime          @default(now()) @map("created_at")
+  linhas          ImportRow[]
+
+  @@map("import_batches")
+}
+
+/// Uma linha do arquivo de origem já processada. `pessoaId`/`dossieId` são
+/// referências soltas (sem `@relation`) — mesmo padrão de `Dossie.subjectId`
+/// (ADR 0015): a integridade é responsabilidade do use case, não do banco,
+/// porque uma linha pode nunca chegar a resolver identidade nenhuma.
+model ImportRow {
+  id                     String                 @id @default(uuid())
+  importBatchId          String                 @map("import_batch_id")
+  importBatch            ImportBatch            @relation(fields: [importBatchId], references: [id], onDelete: Cascade)
+  numeroLinha            Int                    @map("numero_linha")
+  status                 ImportRowStatus
+  resolutionStatus       ImportResolutionStatus @map("resolution_status")
+  pessoaId               String?                @map("pessoa_id")
+  dossieId               String?                @map("dossie_id")
+  documentoMascarado     String?                @map("documento_mascarado")
+  nome                   String?
+  nomeFantasia           String?                @map("nome_fantasia")
+  valorTotal             Decimal?               @map("valor_total") @db.Decimal(14, 2)
+  valorDividaSelecionada Decimal?               @map("valor_divida_selecionada") @db.Decimal(14, 2)
+  naturezaDivida         String?                @map("natureza_divida")
+  motivo                 String?
+  createdAt              DateTime               @default(now()) @map("created_at")
+
+  @@index([importBatchId])
+  @@index([importBatchId, status])
+  @@index([documentoMascarado])
+  @@map("import_rows")
+}
+
+enum AuditEventType {
+  LOGIN
+  LOGOUT
+  PESSOA_CRIADA
+  EMPRESA_CRIADA
+  PARTICIPACAO_SOCIETARIA_CRIADA
+  PLANILHA_IMPORTADA
+  DOSSIE_CRIADO
+  EVIDENCIA_ATUALIZADA
+  IDENTITY_RESOLUTION_EXECUTADA
+  CLASSIFICACAO_EXECUTADA
+  RECOMENDACAO_GERADA
+  PROMPT_GERADO
+  EXPLICACAO_CONSULTADA
+}
+
+enum AuditEventOutcome {
+  SUCESSO
+  FALHA
+}
+
+/// Observado na fronteira HTTP por um middleware genérico (ver ADR 0021) —
+/// não confundir com `AuditLogEntry` (identity, ADR 0007/0010), que é um
+/// log de segurança interno mais granular do módulo de autenticação e
+/// continua existindo de forma independente, sem relação com este model.
+model AuditEvent {
+  id          String             @id @default(uuid())
+  timestamp   DateTime
+  usuarioId   String?            @map("usuario_id")
+  entidade    String
+  entidadeId  String?            @map("entidade_id")
+  tipo        AuditEventType
+  payload     Json
+  requestId   String             @map("request_id")
+  ip          String?
+  userAgent   String?            @map("user_agent")
+  duracaoMs   Int                @map("duracao_ms")
+  outcome     AuditEventOutcome
+  mensagem    String
+
+  @@index([timestamp])
+  @@index([usuarioId])
+  @@index([tipo])
+  @@index([entidade, entidadeId])
+  @@index([requestId])
+  @@map("audit_events")
+}
+
+/// Uma versão imutável e completa do estado de um Dossiê num instante —
+/// evidências, classificação, fatores, recomendações e prompt, todos
+/// congelados no momento da criação (ver ADR 0022). Observado na fronteira
+/// HTTP por um middleware próprio, mesmo padrão de `AuditEvent` (ADR 0021)
+/// — nenhuma relação com `Dossie` no nível do Prisma (referência solta,
+/// mesmo padrão de `ImportRow.dossieId`/`Dossie.subjectId`, ADR 0015/0019).
+model VersionSnapshot {
+  id                 String   @id @default(uuid())
+  dossieId           String   @map("dossie_id")
+  versao             Int
+  timestamp          DateTime
+  usuarioId          String?  @map("usuario_id")
+  evidencias         Json
+  classificacao      String
+  justificativaGeral String   @map("justificativa_geral")
+  fatores            Json
+  recomendacoes      Json
+  prompt             Json
+  confidenceScore    Float    @map("confidence_score")
+  riskScore          Float    @map("risk_score")
+  hash               String
+
+  @@unique([dossieId, versao])
+  @@index([dossieId])
+  @@map("version_snapshots")
+}
+
+enum CaseStatus {
+  ABERTO
+  EM_ANDAMENTO
+  AGUARDANDO_RETORNO
+  NEGOCIACAO
+  RESOLVIDO
+  CANCELADO
+}
+
+enum CasePriority {
+  BAIXA
+  MEDIA
+  ALTA
+  URGENTE
+}
+
+/// Gestão completa do ciclo de cobrança de um Dossiê (ver ADR 0026).
+/// Referência solta a `dossieId` (sem `@relation`), mesmo padrão de
+/// `ImportRow.dossieId`/`VersionSnapshot.dossieId` (ADR 0015/0019/0022).
+model Case {
+  id              String    @id @default(uuid())
+  dossieId        String    @map("dossie_id")
+  status          CaseStatus @default(ABERTO)
+  ownerId         String?   @map("owner_id")
+  priority        CasePriority @default(MEDIA)
+  tags            String[]
+  proximaAcao     String?   @map("proxima_acao")
+  dataProximaAcao DateTime? @map("data_proxima_acao")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  @@index([dossieId])
+  @@index([status])
+  @@index([ownerId])
+  @@map("cases")
+}
+
+/// Nota livre associada a um Case — agregado filho com repositório próprio,
+/// não carregado junto por padrão (mesmo padrão de `ImportBatch`/`ImportRow`,
+/// ADR 0019).
+model CaseNote {
+  id        String   @id @default(uuid())
+  caseId    String   @map("case_id")
+  autorId   String?  @map("autor_id")
+  texto     String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([caseId])
+  @@map("case_notes")
+}
+
+/// Timeline append-only de um Case — mesmo espírito de `AuditLogEntry`/`AuditEvent`.
+model CaseHistoryEntry {
+  id        String   @id @default(uuid())
+  caseId    String   @map("case_id")
+  tipo      String
+  descricao String
+  autorId   String?  @map("autor_id")
+  timestamp DateTime @default(now())
+
+  @@index([caseId])
+  @@map("case_history_entries")
+}
+
+/// Definição de um fluxo configurável (estados/transições/gatilhos/ações) —
+/// ver ADR 0027. Novos fluxos são criados via dados (esta tabela), nunca via
+/// código novo.
+model WorkflowDefinition {
+  id            String   @id @default(uuid())
+  nome          String
+  descricao     String?
+  estados       String[]
+  estadoInicial String   @map("estado_inicial")
+  ativo         Boolean  @default(true)
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+  transicoes    WorkflowTransitionRecord[]
+
+  @@map("workflow_definitions")
+}
+
+/// Uma transição possível de uma `WorkflowDefinition` — carregada junto com
+/// a definição (não é um log que cresce sem limite, é o próprio conteúdo do
+/// fluxo).
+model WorkflowTransitionRecord {
+  id                   String              @id @default(uuid())
+  workflowDefinitionId String              @map("workflow_definition_id")
+  workflowDefinition   WorkflowDefinition  @relation(fields: [workflowDefinitionId], references: [id], onDelete: Cascade)
+  de                   String
+  para                 String
+  gatilho              String
+  condicao             Json?
+  acao                 String?
+
+  @@index([workflowDefinitionId])
+  @@map("workflow_transitions")
+}
+
+/// Uma execução em andamento de uma `WorkflowDefinition`, associada a uma
+/// referência externa solta (`referenciaId` — ex.: um `Case.id`), sem
+/// `@relation`, mesmo padrão de referências soltas entre bounded contexts já
+/// usado em toda a plataforma.
+model WorkflowInstance {
+  id                   String   @id @default(uuid())
+  workflowDefinitionId String   @map("workflow_definition_id")
+  referenciaId         String   @map("referencia_id")
+  estadoAtual          String   @map("estado_atual")
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  @@index([workflowDefinitionId])
+  @@index([referenciaId])
+  @@map("workflow_instances")
+}
+
+/// Timeline append-only de transições já aplicadas a uma `WorkflowInstance`.
+model WorkflowInstanceHistoryEntry {
+  id                 String   @id @default(uuid())
+  workflowInstanceId String   @map("workflow_instance_id")
+  de                 String
+  para               String
+  gatilho            String
+  timestamp          DateTime @default(now())
+
+  @@index([workflowInstanceId])
+  @@map("workflow_instance_history_entries")
+}
+
+/// Fundação de multi-tenant (ver ADR 0028) — deliberadamente não retroativa:
+/// nenhuma tabela de módulos existentes ganhou `tenantId`. Isolamento é
+/// aplicado via `TenantResourceOwnership`, uma camada aditiva por cima de
+/// qualquer recurso de qualquer módulo.
+model Tenant {
+  id        String   @id @default(uuid())
+  nome      String
+  slug      String   @unique
+  ativo     Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  recursos  TenantResourceOwnership[]
+
+  @@map("tenants")
+}
+
+/// Registra qual tenant é proprietário de um recurso de qualquer módulo,
+/// identificado livremente por `resourceType`/`resourceId` — nunca por
+/// `@relation` com a tabela de origem (o módulo `tenant` não conhece nenhum
+/// outro módulo). `@@unique([resourceType, resourceId])` é a garantia real
+/// de isolamento: um recurso nunca pode pertencer a dois tenants ao mesmo
+/// tempo.
+model TenantResourceOwnership {
+  id           String   @id @default(uuid())
+  tenantId     String   @map("tenant_id")
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  resourceType String   @map("resource_type")
+  resourceId   String   @map("resource_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@unique([resourceType, resourceId])
+  @@index([tenantId, resourceType])
+  @@map("tenant_resource_ownerships")
+}
+
+/// Motor de regras configuráveis (Etapa 11, ADR 0030) — peso, prioridade,
+/// condição e ação vêm inteiramente de dados; criar/alterar uma regra é
+/// inserir/atualizar uma linha, nunca escrever uma classe nova. Versionamento
+/// próprio (`RuleVersionEntry`), independente do de dossiê
+/// (dossier-versioning, ADR 0022) — são conceitos diferentes.
+model RuleDefinition {
+  id          String   @id @default(uuid())
+  nome        String
+  descricao   String?
+  recurso     String
+  condicoes   Json
+  peso        Float
+  prioridade  Int
+  acao        String
+  ativo       Boolean  @default(true)
+  versaoAtual Int      @map("versao_atual")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  versoes     RuleVersionEntry[]
+
+  @@index([recurso])
+  @@map("rule_definitions")
+}
+
+/// Histórico append-only de uma `RuleDefinition` — cada criação/atualização
+/// grava uma entrada nova aqui antes de sobrescrever o estado atual; a
+/// entrada nunca é editada ou apagada. Ver ADR 0030.
+model RuleVersionEntry {
+  id               String         @id @default(uuid())
+  ruleDefinitionId String         @map("rule_definition_id")
+  ruleDefinition   RuleDefinition @relation(fields: [ruleDefinitionId], references: [id], onDelete: Cascade)
+  versao           Int
+  nome             String
+  descricao        String?
+  recurso          String
+  condicoes        Json
+  peso             Float
+  prioridade       Int
+  acao             String
+  ativo            Boolean
+  criadoEm         DateTime       @default(now()) @map("criado_em")
+
+  @@unique([ruleDefinitionId, versao])
+  @@index([ruleDefinitionId])
+  @@map("rule_version_entries")
+}
+
+/// Um interruptor de módulo/funcionalidade que pode mudar sem deploy (Etapa
+/// 12, ADR 0031). `ativoPadrao` é o valor usado quando nenhum
+/// `FeatureFlagOverride` se aplica ao contexto avaliado.
+model FeatureFlag {
+  id          String   @id @default(uuid())
+  chave       String   @unique
+  descricao   String?
+  ativoPadrao Boolean  @map("ativo_padrao")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  overrides   FeatureFlagOverride[]
+
+  @@map("feature_flags")
+}
+
+enum FeatureFlagScopeType {
+  TENANT
+  AMBIENTE
+  USUARIO
+}
+
+/// Uma exceção ao valor padrão de uma `FeatureFlag` para um tenant, ambiente
+/// ou usuário específico (`escopoValor` — string livre, este módulo não
+/// conhece `Tenant`/`User` de nenhum outro módulo). `@@unique` garante no
+/// máximo um override por escopo por flag.
+model FeatureFlagOverride {
+  id            String               @id @default(uuid())
+  featureFlagId String               @map("feature_flag_id")
+  featureFlag   FeatureFlag          @relation(fields: [featureFlagId], references: [id], onDelete: Cascade)
+  escopoTipo    FeatureFlagScopeType @map("escopo_tipo")
+  escopoValor   String               @map("escopo_valor")
+  ativo         Boolean
+  createdAt     DateTime             @default(now()) @map("created_at")
+  updatedAt     DateTime             @updatedAt @map("updated_at")
+
+  @@unique([featureFlagId, escopoTipo, escopoValor])
+  @@index([featureFlagId])
+  @@map("feature_flag_overrides")
+}
+
+enum ScheduledJobStatus {
+  PENDENTE
+  EXECUTANDO
+  CONCLUIDO
+  MORTO
+}
+
+enum JobExecutionStatus {
+  SUCESSO
+  FALHA
+}
+
+/// Um job interno agendado (Etapa 13, ADR 0032) — `tipo` identifica o
+/// handler que processa `payload` em runtime, nunca uma classe nova por
+/// job. `agendadoPara` também é a data da próxima tentativa depois de uma
+/// falha (backoff exponencial, ver `JobRetryPolicy`).
+model ScheduledJob {
+  id            String             @id @default(uuid())
+  nome          String
+  tipo          String
+  payload       Json
+  status        ScheduledJobStatus @default(PENDENTE)
+  agendadoPara  DateTime           @map("agendado_para")
+  tentativas    Int                @default(0)
+  maxTentativas Int                @map("max_tentativas")
+  ultimoErro    String?            @map("ultimo_erro")
+  createdAt     DateTime           @default(now()) @map("created_at")
+  updatedAt     DateTime           @updatedAt @map("updated_at")
+  execucoes     JobExecutionEntry[]
+
+  @@index([status, agendadoPara])
+  @@map("scheduled_jobs")
+}
+
+/// Histórico append-only de execuções de um `ScheduledJob` — cada tentativa
+/// (sucesso ou falha) grava uma entrada nova, nunca editada.
+model JobExecutionEntry {
+  id             String             @id @default(uuid())
+  scheduledJobId String             @map("scheduled_job_id")
+  scheduledJob   ScheduledJob       @relation(fields: [scheduledJobId], references: [id], onDelete: Cascade)
+  tentativa      Int
+  status         JobExecutionStatus
+  erro           String?
+  iniciadoEm     DateTime           @map("iniciado_em")
+  finalizadoEm   DateTime           @map("finalizado_em")
+  duracaoMs      Int                @map("duracao_ms")
+
+  @@index([scheduledJobId])
+  @@map("job_execution_entries")
+}

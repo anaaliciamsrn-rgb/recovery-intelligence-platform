@@ -1,0 +1,36 @@
+/**
+ * As treze ações consideradas relevantes para auditoria nesta etapa — a
+ * mesma lista fechada pedida na Etapa 2. Fechado de propósito: um evento
+ * fora desta lista simplesmente não é observado pelo middleware (ver
+ * `auditTrail.middleware.ts`), em vez de um "outro" genérico. Ver ADR 0021.
+ */
+export type AuditEventType =
+  | "LOGIN"
+  | "LOGOUT"
+  | "PESSOA_CRIADA"
+  | "EMPRESA_CRIADA"
+  | "PARTICIPACAO_SOCIETARIA_CRIADA"
+  | "PLANILHA_IMPORTADA"
+  | "DOSSIE_CRIADO"
+  | "EVIDENCIA_ATUALIZADA"
+  | "IDENTITY_RESOLUTION_EXECUTADA"
+  | "CLASSIFICACAO_EXECUTADA"
+  | "RECOMENDACAO_GERADA"
+  | "PROMPT_GERADO"
+  | "EXPLICACAO_CONSULTADA";
+
+export const AuditEventType = {
+  LOGIN: "LOGIN",
+  LOGOUT: "LOGOUT",
+  PESSOA_CRIADA: "PESSOA_CRIADA",
+  EMPRESA_CRIADA: "EMPRESA_CRIADA",
+  PARTICIPACAO_SOCIETARIA_CRIADA: "PARTICIPACAO_SOCIETARIA_CRIADA",
+  PLANILHA_IMPORTADA: "PLANILHA_IMPORTADA",
+  DOSSIE_CRIADO: "DOSSIE_CRIADO",
+  EVIDENCIA_ATUALIZADA: "EVIDENCIA_ATUALIZADA",
+  IDENTITY_RESOLUTION_EXECUTADA: "IDENTITY_RESOLUTION_EXECUTADA",
+  CLASSIFICACAO_EXECUTADA: "CLASSIFICACAO_EXECUTADA",
+  RECOMENDACAO_GERADA: "RECOMENDACAO_GERADA",
+  PROMPT_GERADO: "PROMPT_GERADO",
+  EXPLICACAO_CONSULTADA: "EXPLICACAO_CONSULTADA",
+} as const satisfies Record<string, AuditEventType>;

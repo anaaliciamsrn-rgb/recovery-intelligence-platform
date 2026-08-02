@@ -1,0 +1,15 @@
+# O contexto de build dos serviços em docker-compose.yml é a raiz do repo
+# (`context: .`), não o diretório de cada Dockerfile — por isso este arquivo
+# precisa estar aqui, não em apps/api/ ou apps/web/. Excluir node_modules é
+# obrigatório, não opcional: os node_modules do host são symlinks do pnpm
+# para a store em node_modules/.pnpm/ — copiá-los para dentro da imagem
+# sobrescreve o node_modules recém-instalado pelo `pnpm install` do próprio
+# Dockerfile, quebrando os binários de devDependency (tsc, prisma etc.).
+node_modules
+dist
+coverage
+.git
+.env
+.env.*.local
+*.log
+apps/api/tests

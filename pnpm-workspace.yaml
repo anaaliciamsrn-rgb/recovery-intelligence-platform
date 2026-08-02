@@ -1,0 +1,18 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+overrides:
+  # handlebars@4.7.8 (transitivo via eslint-plugin-boundaries -> @boundaries/elements)
+  # tem CVEs de injeção de JS conhecidas (GHSA-2w6w-674q-4c4q e outras) — só
+  # ferramenta de lint em desenvolvimento, nunca roda em produção, mas o fix
+  # é um patch trivial sem breaking change.
+  handlebars: ">=4.7.9"
+allowBuilds:
+  "@prisma/client": true
+  "@prisma/engines": true
+  "@scarf/scarf": false
+  "@swc/core": true
+  argon2: true
+  esbuild: true
+  prisma: true
+  unrs-resolver: true

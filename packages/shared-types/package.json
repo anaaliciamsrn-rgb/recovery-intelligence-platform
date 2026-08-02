@@ -1,0 +1,17 @@
+{
+  "name": "@rip/shared-types",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Contratos TypeScript compartilhados entre apps/api e apps/web (sem lógica, apenas tipos).",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "types": "./src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3"
+  }
+}

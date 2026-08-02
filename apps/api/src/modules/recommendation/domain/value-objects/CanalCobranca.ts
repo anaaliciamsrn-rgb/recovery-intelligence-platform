@@ -1,0 +1,10 @@
+export type CanalCobranca =
+  "WHATSAPP" | "LIGACAO" | "COBRANCA_AMIGAVEL" | "PARCELAMENTO" | "COBRANCA_JURIDICA";
+
+export const CanalCobranca = {
+  WHATSAPP: "WHATSAPP",
+  LIGACAO: "LIGACAO",
+  COBRANCA_AMIGAVEL: "COBRANCA_AMIGAVEL",
+  PARCELAMENTO: "PARCELAMENTO",
+  COBRANCA_JURIDICA: "COBRANCA_JURIDICA",
+} as const satisfies Record<string, CanalCobranca>;
