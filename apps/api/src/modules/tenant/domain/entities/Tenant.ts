@@ -56,4 +56,21 @@ export class Tenant {
   toProps(): Readonly<TenantProps> {
     return { ...this.props };
   }
+
+  /**
+   * Normaliza texto livre (nome de empresa, domínio de e-mail) num slug
+   * válido para `slug` — remove acentos, minúsculas, hífens únicos. Usado
+   * por `identity` no autocadastro para resolver/criar o tenant a partir do
+   * campo "empresa" sem duplicar a regra de formato em outro módulo (ver
+   * ADR 0037).
+   */
+  static slugify(input: string): string {
+    const normalizado = input
+      .normalize("NFD")
+      .replace(/[̀-ͯ]/g, "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+    return normalizado.length > 0 ? normalizado : "tenant";
+  }
 }

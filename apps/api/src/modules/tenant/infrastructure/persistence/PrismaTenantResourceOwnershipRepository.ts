@@ -31,6 +31,18 @@ export class PrismaTenantResourceOwnershipRepository implements ITenantResourceO
     return record ? this.toDomain(record) : null;
   }
 
+  async listResourceIds(tenantId: string, resourceType: string): Promise<string[]> {
+    const records = await this.prisma.tenantResourceOwnership.findMany({
+      where: { tenantId, resourceType },
+      select: { resourceId: true },
+    });
+    return records.map((record) => record.resourceId);
+  }
+
+  async deleteByTenantAndType(tenantId: string, resourceType: string): Promise<void> {
+    await this.prisma.tenantResourceOwnership.deleteMany({ where: { tenantId, resourceType } });
+  }
+
   private toDomain(record: PrismaTenantResourceOwnershipRecord): TenantResourceOwnership {
     return TenantResourceOwnership.create({
       id: record.id,

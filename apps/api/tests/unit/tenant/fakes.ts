@@ -48,6 +48,22 @@ export class FakeTenantResourceOwnershipRepository implements ITenantResourceOwn
     );
   }
 
+  async listResourceIds(tenantId: string, resourceType: string): Promise<string[]> {
+    return this.ownerships
+      .filter(
+        (ownership) => ownership.tenantId === tenantId && ownership.resourceType === resourceType,
+      )
+      .map((ownership) => ownership.resourceId);
+  }
+
+  async deleteByTenantAndType(tenantId: string, resourceType: string): Promise<void> {
+    const remaining = this.ownerships.filter(
+      (ownership) => !(ownership.tenantId === tenantId && ownership.resourceType === resourceType),
+    );
+    this.ownerships.length = 0;
+    this.ownerships.push(...remaining);
+  }
+
   seed(ownership: TenantResourceOwnership): void {
     this.ownerships.push(ownership);
   }
