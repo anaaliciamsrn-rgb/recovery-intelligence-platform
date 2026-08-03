@@ -13,6 +13,12 @@ FROM base AS build
 COPY . .
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
     pnpm install --frozen-lockfile --filter @rip/web...
+# Vite embute VITE_* no bundle em tempo de build (nunca em runtime) — por
+# isso precisa ser ARG aqui, não uma env do container final. Plataformas como
+# Railway populam automaticamente um ARG que tenha o mesmo nome de uma
+# variável de serviço configurada no dashboard.
+ARG VITE_API_URL
+ENV VITE_API_URL=$VITE_API_URL
 RUN pnpm --filter @rip/web build
 
 # ---- runtime: serve os assets estáticos gerados pelo Vite ----
