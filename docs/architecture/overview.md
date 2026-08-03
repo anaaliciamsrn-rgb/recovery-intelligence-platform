@@ -1,6 +1,6 @@
 # Visão geral da arquitetura
 
-> Este documento descreve o estado atual da plataforma: 20 módulos de negócio em Clean Architecture, RBAC granular, auditoria e versionamento de dossiê integrados desde a origem. Para o _porquê_ de cada decisão, ver as [ADRs](decisions/) — este documento é o mapa, as ADRs são a justificativa.
+> Este documento descreve o estado atual da plataforma: 21 módulos de negócio em Clean Architecture, RBAC granular, auditoria, versionamento de dossiê e multi-tenancy real integrados desde a origem. Para o _porquê_ de cada decisão, ver as [ADRs](decisions/) — este documento é o mapa, as ADRs são a justificativa.
 
 ## Camadas (`apps/api/src`, replicadas dentro de cada módulo)
 
@@ -70,7 +70,7 @@ flowchart TB
     casemgmt --> dossie
 ```
 
-Setas sólidas = dependência direta (reconstrução de use case, mesmo padrão do ADR 0010). Setas pontilhadas = as únicas exceções documentadas de acoplamento por leitura entre módulos (ADRs 0024/0025). `tenant`, `rule-builder`, `feature-flags`, `scheduler` e `cache` são **fundações standalone**: infraestrutura real e testada, mas sem nenhum módulo de negócio consumindo-as ainda — cada uma tem essa limitação registrada explicitamente na sua ADR (0028/0030/0031/0032), por ser mais honesto documentar a lacuna do que fingir integração que exigiria alterar módulos já aprovados.
+Setas sólidas = dependência direta (reconstrução de use case, mesmo padrão do ADR 0010). Setas pontilhadas = as únicas exceções documentadas de acoplamento por leitura entre módulos (ADRs 0024/0025). `rule-builder`, `feature-flags`, `scheduler` e `cache` continuam **fundações standalone**: infraestrutura real e testada, mas sem nenhum módulo de negócio consumindo-as ainda (ADRs 0030/0031/0032/0033). `tenant` deixou de ser standalone na ADR 0037/0038: `identity` (registra usuário↔tenant no autocadastro/OAuth), `import` (registra Dossiê/ImportBatch ao importar), `analytics` e `case-management` (resolvem `listResourceIds`/ownership antes de qualquer leitura agregada) e `identity-resolution` (`FindDossieForCandidateUseCase`, só revela um Dossiê ao tenant dono) já dependem dele de verdade.
 
 ## Fluxo de uma requisição autenticada (`GET /api/v1/cases`)
 
@@ -84,13 +84,13 @@ Request
   → metricsMiddleware          (Prometheus: contador + histograma por rota)
   → auditTrailMiddleware       (observa a rota; grava evento de auditoria no fire-and-forget)
   → versionSnapshotMiddleware  (observa rotas de dossiê; snapshot de versão se aplicável)
-  → resolveTenantMiddleware    (lê X-Tenant-Id, popula req.tenantId — nunca bloqueia)
+  → resolveTenantMiddleware    (lê X-Tenant-Id — legado/compatibilidade, nunca a fonte de verdade desde a ADR 0037; nenhum código novo o usa)
   → rateLimitMiddleware        (Redis-backed)
   → router /api/v1/cases
-  → authenticateMiddleware     (valida JWT, popula req.auth)
+  → authenticateMiddleware     (valida JWT, popula req.auth — INCLUINDO req.auth.tenantId, a fonte de verdade real do tenant desde a ADR 0037)
   → authorizeMiddleware("case:read")  (RBAC — nega por padrão)
   → CaseController.list
-  → ListCasesUseCase.execute() → ICaseRepository.findMany()
+  → ListCasesUseCase.execute() → resolve dossieIds do tenant via listResourceIds() → ICaseRepository.findManyByDossieIds()
   → res.json(CasePage)
 
 Se qualquer middleware/controller chamar next(err):
@@ -116,6 +116,8 @@ flowchart LR
 ## Multi-tenant — modelo de isolamento
 
 `TenantResourceOwnership(resourceType, resourceId)` com `@@unique` é a garantia real: um recurso nunca tem dois donos ao mesmo tempo, e `TenantPolicy.podeAcessar` é fail-closed (sem registro de propriedade, nenhum tenant acessa). O módulo `tenant` não conhece nenhum outro módulo — `resourceType`/`resourceId` são strings livres. Ver [ADR 0028](decisions/0028-multi-tenant-foundation.md) para por que isso é uma fundação aditiva, não um retrofit sobre tabelas existentes.
+
+Desde a [ADR 0037](decisions/0037-multi-tenant-import-e-empresas.md), isso deixou de ser só fundação: `AccessTokenClaims.tenantId` (assinado no JWT, nunca um header) é a única fonte de verdade do tenant do chamador. `User`/`Dossie`/`ImportBatch` continuam sem coluna `tenant_id` própria — todo caminho de escrita registra a propriedade via `RegisterTenantResourceUseCase` depois de persistir, e toda leitura agregada resolve `listResourceIds(tenantId, resourceType)` primeiro. `Case` não tem `TenantResourceOwnership` própria — pertence ao tenant do seu `Dossie` transitivamente (ver [ADR 0038](decisions/0038-demo-richness-explainability-e-integracao-real.md)).
 
 ## Modelo de dados — agregados principais
 
