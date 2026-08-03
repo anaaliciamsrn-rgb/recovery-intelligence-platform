@@ -1,6 +1,9 @@
 import type { ApiErrorResponse } from "@rip/shared-types";
 
-const API_BASE_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3000/api/v1";
+// `||`, não `??`: um build Docker sem a build arg VITE_API_URL preenchida vira
+// string vazia (não undefined) — com `??` isso passava direto e todo request
+// virava relativo à própria origem do frontend, sem erro visível.
+const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3000/api/v1";
 
 export class ApiError extends Error {
   constructor(
