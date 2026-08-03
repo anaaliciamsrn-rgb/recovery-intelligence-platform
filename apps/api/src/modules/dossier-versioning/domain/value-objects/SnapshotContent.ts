@@ -1,4 +1,5 @@
 import type { DirecaoFator } from "../../../classification/domain/value-objects/DirecaoFator.js";
+import type { DossieFonte } from "../../../dossie/domain/value-objects/DossieFonte.js";
 import type { CanalCobranca } from "../../../recommendation/domain/value-objects/CanalCobranca.js";
 
 /**
@@ -28,6 +29,7 @@ export interface FatorSnapshot {
   peso: number;
   direcao: DirecaoFator;
   justificativa: string;
+  fonte: DossieFonte;
 }
 
 export interface RecomendacaoSnapshotItem {

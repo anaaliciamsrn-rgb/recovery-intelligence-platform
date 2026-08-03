@@ -5,20 +5,6 @@ import type {
   SimulationStateSnapshot,
 } from "../value-objects/SimulationStateSnapshot.js";
 
-/**
- * Liga cada fonte a sua regra de classificação — mesma tabela (e a mesma
- * limitação: só existe hoje para as três regras registradas em
- * `classification`) já usada em `FatorSourceMapper` (explainability, ADR
- * 0020). Duplicada aqui deliberadamente — `simulation` não deveria
- * depender de `explainability` (módulo-etapa irmão) só por uma tabela de 3
- * linhas. Ver ADR 0023.
- */
-const NOME_FATOR_POR_FONTE: Record<string, string> = {
-  PGFN: "Pendência Fiscal (PGFN)",
-  DATAJUD: "Processo Judicial (DataJud)",
-  RECEITA_FEDERAL: "Situação Cadastral (Receita Federal)",
-};
-
 const NOME_FONTE_LEGIVEL: Record<string, string> = {
   PGFN: "PGFN",
   DATAJUD: "DataJud",
@@ -27,14 +13,21 @@ const NOME_FONTE_LEGIVEL: Record<string, string> = {
   CENPROT: "CENPROT",
 };
 
-function encontrarFator(fatores: FatorSnapshot[], nome: string): FatorSnapshot | undefined {
-  return fatores.find((fator) => fator.nome === nome);
+function encontrarFatorPorFonte(
+  fatores: FatorSnapshot[],
+  fonte: string,
+): FatorSnapshot | undefined {
+  return fatores.find((fator) => fator.fonte === fonte);
 }
 
 /**
  * Explica, de forma determinística (sem IA), por que cada mudança
  * hipotética aplicada gerou (ou não) impacto — comparando o fator de
- * classificação associado à fonte alterada antes e depois. Ver ADR 0023.
+ * classificação associado à fonte alterada antes e depois. Desde a ADR
+ * 0037, a ligação fonte→fator usa `FatorSnapshot.fonte` (preenchido pela
+ * própria regra que o produziu), não mais uma tabela própria "fonte → nome
+ * da regra" que ficava obsoleta sempre que uma regra nova era adicionada só
+ * em `classification`. Ver ADR 0023/0037.
  */
 export class SimulationImpactAnalyzer {
   static analyze(
@@ -87,9 +80,11 @@ export class SimulationImpactAnalyzer {
     recomendacaoMudou: boolean,
   ): SimulationImpactEntry {
     const nomeFonte = NOME_FONTE_LEGIVEL[change.fonte] ?? change.fonte;
-    const nomeRegra = NOME_FATOR_POR_FONTE[change.fonte];
 
-    if (!nomeRegra) {
+    const fatorAntes = encontrarFatorPorFonte(antes.fatores, change.fonte);
+    const fatorDepois = encontrarFatorPorFonte(depois.fatores, change.fonte);
+
+    if (!fatorAntes && !fatorDepois) {
       return {
         change,
         descricao: `A mudança na evidência de ${nomeFonte} não tem nenhuma regra de classificação associada hoje — não influencia o score de risco.`,
@@ -100,8 +95,6 @@ export class SimulationImpactAnalyzer {
       };
     }
 
-    const fatorAntes = encontrarFator(antes.fatores, nomeRegra);
-    const fatorDepois = encontrarFator(depois.fatores, nomeRegra);
     const afetouRisco =
       fatorAntes?.peso !== fatorDepois?.peso || fatorAntes?.direcao !== fatorDepois?.direcao;
 
@@ -113,7 +106,7 @@ export class SimulationImpactAnalyzer {
     } else if (fatorAntes && fatorDepois && afetouRisco) {
       descricao = `A regra "${fatorAntes.nome}" mudou de ${fatorAntes.direcao} para ${fatorDepois.direcao} após a alteração na evidência de ${nomeFonte}.`;
     } else {
-      descricao = `A alteração na evidência de ${nomeFonte} não mudou o resultado da regra "${nomeRegra}".`;
+      descricao = `A alteração na evidência de ${nomeFonte} não mudou o resultado da regra "${fatorAntes?.nome ?? fatorDepois?.nome}".`;
     }
 
     return {

@@ -149,6 +149,7 @@ export class RunSimulationUseCase {
       peso: fator.peso,
       direcao: fator.direcao,
       justificativa: fator.justificativa,
+      fonte: fator.fonte,
     }));
 
     const recommendationInput: RecommendationRuleInput = {

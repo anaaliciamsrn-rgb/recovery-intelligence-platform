@@ -2,10 +2,7 @@ import { ConfidenceScore } from "../../../src/domain/value-objects/ConfidenceSco
 import { Evidence } from "../../../src/domain/value-objects/Evidence.js";
 import { Fator } from "../../../src/modules/classification/domain/value-objects/Fator.js";
 import { Dossie } from "../../../src/modules/dossie/domain/entities/Dossie.js";
-import {
-  FatorSemFonteMapeadaError,
-  FatorSourceMapper,
-} from "../../../src/modules/explainability/domain/services/FatorSourceMapper.js";
+import { FatorSourceMapper } from "../../../src/modules/explainability/domain/services/FatorSourceMapper.js";
 
 const NOW = new Date("2026-01-01T00:00:00Z");
 const CONF = ConfidenceScore.create(0.9);
@@ -50,6 +47,7 @@ describe("FatorSourceMapper", () => {
     const fator = Fator.create({
       nome: "Pendência Fiscal (PGFN)",
       peso: 0.4,
+      fonte: "PGFN",
       direcao: "AUMENTA_RISCO",
       justificativa: "PGFN reporta pendência fiscal em aberto",
     });
@@ -68,6 +66,7 @@ describe("FatorSourceMapper", () => {
     const fator = Fator.create({
       nome: "Processo Judicial (DataJud)",
       peso: 0.35,
+      fonte: "DATAJUD",
       direcao: "REDUZ_RISCO",
       justificativa: "DataJud não reporta nenhum processo judicial ativo",
     });
@@ -82,6 +81,7 @@ describe("FatorSourceMapper", () => {
     const fator = Fator.create({
       nome: "Situação Cadastral (Receita Federal)",
       peso: 0.25,
+      fonte: "RECEITA_FEDERAL",
       direcao: "REDUZ_RISCO",
       justificativa: "Situação cadastral na Receita Federal é ATIVA",
     });
@@ -95,12 +95,14 @@ describe("FatorSourceMapper", () => {
     const fatorPgfn = Fator.create({
       nome: "Pendência Fiscal (PGFN)",
       peso: 0.4,
+      fonte: "PGFN",
       direcao: "AUMENTA_RISCO",
       justificativa: "x",
     });
     const fatorReceita = Fator.create({
       nome: "Situação Cadastral (Receita Federal)",
       peso: 0.25,
+      fonte: "RECEITA_FEDERAL",
       direcao: "REDUZ_RISCO",
       justificativa: "y",
     });
@@ -108,18 +110,5 @@ describe("FatorSourceMapper", () => {
     const explicados = FatorSourceMapper.map([fatorPgfn, fatorReceita], buildEvidencias());
 
     expect(explicados.map((e) => e.fonte)).toEqual(["PGFN", "RECEITA_FEDERAL"]);
-  });
-
-  it("lança FatorSemFonteMapeadaError para um fator sem entrada mapeada", () => {
-    const fatorDesconhecido = Fator.create({
-      nome: "Regra Desconhecida",
-      peso: 0.5,
-      direcao: "AUMENTA_RISCO",
-      justificativa: "z",
-    });
-
-    expect(() => FatorSourceMapper.map([fatorDesconhecido], buildEvidencias())).toThrow(
-      FatorSemFonteMapeadaError,
-    );
   });
 });

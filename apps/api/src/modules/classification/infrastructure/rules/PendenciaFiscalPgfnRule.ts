@@ -27,6 +27,7 @@ export class PendenciaFiscalPgfnRule implements IClassificationRule {
     return Fator.create({
       nome: this.nome,
       peso: 0.4,
+      fonte: "PGFN",
       direcao: pendencia ? "AUMENTA_RISCO" : "REDUZ_RISCO",
       justificativa: pendencia
         ? "PGFN reporta pendência fiscal em aberto"

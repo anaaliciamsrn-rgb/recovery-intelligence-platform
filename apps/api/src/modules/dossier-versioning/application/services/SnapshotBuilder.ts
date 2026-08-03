@@ -47,6 +47,7 @@ export class SnapshotBuilder {
         peso: fator.peso,
         direcao: fator.direcao,
         justificativa: fator.justificativa,
+        fonte: fator.fonte,
       })),
       recomendacoes: resultadoRecomendacao.recomendacoes.map((recomendacao) => ({
         canal: recomendacao.canal,

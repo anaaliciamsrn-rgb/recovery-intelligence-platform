@@ -54,6 +54,7 @@ describe("ConfidenceHeatmapBuilder", () => {
       Fator.create({
         nome: "Pendência Fiscal (PGFN)",
         peso: 0.4,
+        fonte: "PGFN",
         direcao: "AUMENTA_RISCO",
         justificativa: "x",
       }),
@@ -69,12 +70,14 @@ describe("ConfidenceHeatmapBuilder", () => {
       Fator.create({
         nome: "Pendência Fiscal (PGFN)",
         peso: 0.4,
+        fonte: "PGFN",
         direcao: "AUMENTA_RISCO",
         justificativa: "x",
       }),
       Fator.create({
         nome: "Situação Cadastral (Receita Federal)",
         peso: 0.25,
+        fonte: "RECEITA_FEDERAL",
         direcao: "REDUZ_RISCO",
         justificativa: "y",
       }),

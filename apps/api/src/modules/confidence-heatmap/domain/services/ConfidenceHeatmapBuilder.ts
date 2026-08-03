@@ -12,13 +12,6 @@ const FONTES: { campo: keyof DossieEvidencias; fonte: DossieFonte }[] = [
   { campo: "cenprot", fonte: "CENPROT" },
 ];
 
-/** Mesma tabela de 3 linhas fonte→regra já vista em `FatorSourceMapper` (explainability) e `SimulationImpactAnalyzer` (simulation) — duplicada aqui pelo mesmo motivo: módulos-etapa irmãos não deveriam depender um do outro por uma tabela tão pequena. Ver ADR 0024. */
-const NOME_FATOR_POR_FONTE: Record<string, string> = {
-  PGFN: "Pendência Fiscal (PGFN)",
-  DATAJUD: "Processo Judicial (DataJud)",
-  RECEITA_FEDERAL: "Situação Cadastral (Receita Federal)",
-};
-
 function confidenceScoreDe(evidence: Evidence<unknown>): number | null {
   return evidence.status === "ENCONTRADO" || evidence.status === "NAO_ENCONTRADO"
     ? evidence.confidenceScore.toNumber()
@@ -72,11 +65,6 @@ export class ConfidenceHeatmapBuilder {
     const temReduz = fatores.some((fator) => fator.direcao === "REDUZ_RISCO");
     if (!temAumenta || !temReduz) return [];
 
-    const fontePorNomeFator = Object.fromEntries(
-      Object.entries(NOME_FATOR_POR_FONTE).map(([fonte, nome]) => [nome, fonte as DossieFonte]),
-    );
-    return fatores
-      .map((fator) => fontePorNomeFator[fator.nome])
-      .filter((fonte): fonte is DossieFonte => fonte !== undefined);
+    return fatores.map((fator) => fator.fonte);
   }
 }

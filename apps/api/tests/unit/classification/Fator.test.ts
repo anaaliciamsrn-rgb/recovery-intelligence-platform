@@ -8,6 +8,7 @@ describe("Fator", () => {
     const fator = Fator.create({
       nome: "X",
       peso: 0.5,
+      fonte: "PGFN",
       direcao: "AUMENTA_RISCO",
       justificativa: "x",
     });
@@ -18,13 +19,25 @@ describe("Fator", () => {
 
   it("rejeita peso menor ou igual a zero", () => {
     expect(() =>
-      Fator.create({ nome: "X", peso: 0, direcao: "AUMENTA_RISCO", justificativa: "x" }),
+      Fator.create({
+        nome: "X",
+        peso: 0,
+        fonte: "PGFN",
+        direcao: "AUMENTA_RISCO",
+        justificativa: "x",
+      }),
     ).toThrow(InvalidFatorError);
   });
 
   it("rejeita peso maior que 1", () => {
     expect(() =>
-      Fator.create({ nome: "X", peso: 1.1, direcao: "AUMENTA_RISCO", justificativa: "x" }),
+      Fator.create({
+        nome: "X",
+        peso: 1.1,
+        fonte: "PGFN",
+        direcao: "AUMENTA_RISCO",
+        justificativa: "x",
+      }),
     ).toThrow(InvalidFatorError);
   });
 });

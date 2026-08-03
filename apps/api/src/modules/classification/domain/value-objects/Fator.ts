@@ -1,4 +1,5 @@
 import { DomainError } from "../../../../domain/errors/DomainError.js";
+import type { DossieFonte } from "../../../dossie/domain/value-objects/DossieFonte.js";
 import type { DirecaoFator } from "./DirecaoFator.js";
 
 export class InvalidFatorError extends DomainError {}
@@ -10,12 +11,20 @@ export class InvalidFatorError extends DomainError {}
  * aplicam (ex.: evidência ainda `NAO_CONSULTADO`) não produzem fator
  * nenhum, em vez de produzir um fator "neutro" — omissão explícita, não um
  * valor placeholder. Ver ADR 0016.
+ *
+ * `fonte` é a fonte de evidência que originou o fator, declarada pela
+ * própria regra que o produziu (ADR 0037) — antes disso, três módulos
+ * diferentes (`ConfidenceHeatmapBuilder`, `FatorSourceMapper`,
+ * `SimulationImpactAnalyzer`) mantinham a mesma tabela "nome do fator →
+ * fonte" como gambiarra, que ficava obsoleta silenciosamente sempre que uma
+ * regra nova era adicionada em só um dos três lugares.
  */
 export interface FatorProps {
   nome: string;
   peso: number;
   direcao: DirecaoFator;
   justificativa: string;
+  fonte: DossieFonte;
 }
 
 export class Fator {
@@ -42,5 +51,9 @@ export class Fator {
 
   get justificativa(): string {
     return this.props.justificativa;
+  }
+
+  get fonte(): DossieFonte {
+    return this.props.fonte;
   }
 }

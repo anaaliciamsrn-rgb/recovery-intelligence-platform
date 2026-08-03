@@ -30,6 +30,7 @@ export class SituacaoCadastralReceitaRule implements IClassificationRule {
     return Fator.create({
       nome: this.nome,
       peso: 0.25,
+      fonte: "RECEITA_FEDERAL",
       direcao: ativa ? "REDUZ_RISCO" : "AUMENTA_RISCO",
       justificativa: ativa
         ? "Situação cadastral na Receita Federal é ATIVA"

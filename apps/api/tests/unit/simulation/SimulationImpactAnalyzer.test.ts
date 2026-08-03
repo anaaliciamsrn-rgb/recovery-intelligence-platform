@@ -30,6 +30,7 @@ describe("SimulationImpactAnalyzer", () => {
         {
           nome: "Pendência Fiscal (PGFN)",
           peso: 0.4,
+          fonte: "PGFN",
           direcao: "AUMENTA_RISCO",
           justificativa: "x",
         },
@@ -55,6 +56,7 @@ describe("SimulationImpactAnalyzer", () => {
         {
           nome: "Pendência Fiscal (PGFN)",
           peso: 0.4,
+          fonte: "PGFN",
           direcao: "AUMENTA_RISCO",
           justificativa: "x",
         },

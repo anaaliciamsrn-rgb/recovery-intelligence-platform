@@ -26,6 +26,7 @@ export class ProcessoJudicialDataJudRule implements IClassificationRule {
     return Fator.create({
       nome: this.nome,
       peso: 0.35,
+      fonte: "DATAJUD",
       direcao: processo ? "AUMENTA_RISCO" : "REDUZ_RISCO",
       justificativa: processo
         ? "DataJud reporta processo judicial ativo envolvendo o sujeito"

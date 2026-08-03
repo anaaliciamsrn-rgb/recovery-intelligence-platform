@@ -1,29 +1,25 @@
-import { DomainError } from "../../../../domain/errors/DomainError.js";
 import type { DossieEvidencias } from "../../../dossie/domain/entities/Dossie.js";
 import type { DossieFonte } from "../../../dossie/domain/value-objects/DossieFonte.js";
 import type { Fator } from "../../../classification/domain/value-objects/Fator.js";
 import { FatorExplicado } from "../value-objects/FatorExplicado.js";
 
-export class FatorSemFonteMapeadaError extends DomainError {}
-
-interface FonteMapeada {
-  fonte: DossieFonte;
-  campo: keyof DossieEvidencias;
-}
-
 /**
- * Liga cada `Fator.nome` (classification, ADR 0016) à fonte/campo de
- * evidência do Dossiê de onde ele vem. `IClassificationRule` não expõe essa
- * ligação (só `nome`/`avaliar`), então esta tabela é a única fonte de
- * verdade — reflete, hoje, as três regras registradas no container de
- * `classification`. Adicionar uma regra nova aí exige uma entrada
- * correspondente aqui; sem ela, `map` falha explicitamente em vez de
- * adivinhar a fonte de um fator desconhecido. Ver ADR 0020.
+ * `fonte → campo` de `DossieEvidencias` — tabela estrutural exaustiva sobre
+ * o enum fechado `DossieFonte` (ver `Dossie.ts`), não sobre "quais regras de
+ * classificação existem". Antes da ADR 0037, esta classe mapeava
+ * `Fator.nome → {fonte, campo}` e falhava em runtime se uma regra nova
+ * esquecesse de atualizar a tabela; agora `Fator.fonte` já vem preenchido
+ * pela própria regra, e esta tabela nunca fica obsoleta ao adicionar uma
+ * regra (só precisaria mudar se uma fonte de evidência nova fosse
+ * adicionada ao Dossiê, o que já exige tocar em `Dossie.ts` de qualquer
+ * forma). Ver ADR 0020/0037.
  */
-const FATOR_NOME_PARA_FONTE: Record<string, FonteMapeada> = {
-  "Pendência Fiscal (PGFN)": { fonte: "PGFN", campo: "pgfn" },
-  "Processo Judicial (DataJud)": { fonte: "DATAJUD", campo: "dataJud" },
-  "Situação Cadastral (Receita Federal)": { fonte: "RECEITA_FEDERAL", campo: "receitaFederal" },
+const FONTE_PARA_CAMPO: Record<DossieFonte, keyof DossieEvidencias> = {
+  PGFN: "pgfn",
+  DATAJUD: "dataJud",
+  RECEITA_FEDERAL: "receitaFederal",
+  PORTAL_TRANSPARENCIA: "portalTransparencia",
+  CENPROT: "cenprot",
 };
 
 export class FatorSourceMapper {
@@ -32,20 +28,13 @@ export class FatorSourceMapper {
   }
 
   private static mapOne(fator: Fator, evidencias: DossieEvidencias): FatorExplicado {
-    const mapeamento = FATOR_NOME_PARA_FONTE[fator.nome];
-    if (!mapeamento) {
-      throw new FatorSemFonteMapeadaError(
-        `Nenhuma fonte mapeada para o fator "${fator.nome}" — atualize FatorSourceMapper ao registrar uma nova regra de classificação`,
-      );
-    }
-
     return FatorExplicado.create({
       nome: fator.nome,
       peso: fator.peso,
       direcao: fator.direcao,
       justificativa: fator.justificativa,
-      fonte: mapeamento.fonte,
-      evidencia: evidencias[mapeamento.campo],
+      fonte: fator.fonte,
+      evidencia: evidencias[FONTE_PARA_CAMPO[fator.fonte]],
     });
   }
 }

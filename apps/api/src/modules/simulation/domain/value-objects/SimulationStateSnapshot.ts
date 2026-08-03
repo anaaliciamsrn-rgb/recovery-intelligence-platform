@@ -30,6 +30,7 @@ export interface FatorSnapshot {
   peso: number;
   direcao: DirecaoFator;
   justificativa: string;
+  fonte: string;
 }
 
 export interface RecomendacaoSnapshotItem {

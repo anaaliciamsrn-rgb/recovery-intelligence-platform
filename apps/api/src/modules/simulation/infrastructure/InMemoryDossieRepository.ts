@@ -16,7 +16,19 @@ export class InMemoryDossieRepository implements IDossieRepository {
     return this.dossie.id === id ? this.dossie : null;
   }
 
+  async findManyByIds(ids: string[]): Promise<Dossie[]> {
+    return ids.includes(this.dossie.id) ? [this.dossie] : [];
+  }
+
+  async findBySubject(): Promise<Dossie | null> {
+    return null;
+  }
+
   async save(): Promise<void> {
+    // Intencionalmente vazio — ver o comentário da classe.
+  }
+
+  async deleteMany(): Promise<void> {
     // Intencionalmente vazio — ver o comentário da classe.
   }
 }
