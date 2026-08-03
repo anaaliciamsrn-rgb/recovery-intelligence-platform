@@ -109,6 +109,35 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   return payload as T;
 }
 
+/**
+ * Baixa um arquivo binário (ex.: planilha .xlsx) autenticado e dispara o
+ * download nativo do navegador — separado de `request()` porque a resposta
+ * nunca é JSON (o parsing de `contentType` ali assumiria corpo vazio).
+ */
+async function downloadFile(path: string, filename: string): Promise<void> {
+  const headers: Record<string, string> = {};
+  if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
+
+  const response = await fetch(buildUrl(path), { headers, credentials: "include" });
+  if (!response.ok) {
+    throw new ApiError(
+      "DOWNLOAD_FAILED",
+      `Erro ${response.status} ao baixar arquivo`,
+      response.status,
+    );
+  }
+
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}
+
 export const apiClient = {
   get: <T>(path: string, query?: RequestOptions["query"]) =>
     request<T>(path, query === undefined ? { method: "GET" } : { method: "GET", query }),
@@ -118,4 +147,5 @@ export const apiClient = {
   put: <T>(path: string, body?: unknown) => request<T>(path, { method: "PUT", body }),
   delete: <T>(path: string, query?: RequestOptions["query"]) =>
     request<T>(path, query === undefined ? { method: "DELETE" } : { method: "DELETE", query }),
+  downloadFile,
 };

@@ -12,7 +12,9 @@ const NAV_ITEMS: NavItem[] = [
   { to: "/app", label: "Dashboard executivo", icon: "📊" },
   { to: "/app/operacional", label: "Operacional", icon: "🗂️" },
   { to: "/app/casos", label: "Casos", icon: "📋" },
+  { to: "/app/consulta", label: "Consultar CPF/CNPJ", icon: "🔍" },
   { to: "/app/relacionamentos", label: "Relacionamentos", icon: "🕸️" },
+  { to: "/app/importacoes", label: "Importações", icon: "📥" },
   { to: "/app/relatorio", label: "Relatório executivo", icon: "📄" },
 ];
 

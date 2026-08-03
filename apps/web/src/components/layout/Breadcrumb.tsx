@@ -6,9 +6,11 @@ const SEGMENT_LABEL: Record<string, string> = {
   casos: "Casos",
   dossies: "Dossiê",
   relacionamentos: "Relacionamentos societários",
+  importacoes: "Importações",
   relatorio: "Relatório executivo",
   perfil: "Minha conta",
   configuracoes: "Configurações",
+  usuarios: "Usuários",
 };
 
 /** Deriva o rastro de navegação puramente da URL — sem estado próprio, sempre em sincronia com a rota atual. */

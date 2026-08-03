@@ -28,6 +28,38 @@ export interface TemporalDataPoint {
   totalVersoes: number;
 }
 
+export interface IdentityMatchSignal {
+  tipo: string;
+  peso: number;
+  favoravel: boolean;
+  descricao: string;
+}
+
+export interface IdentityMatchDossie {
+  dossieId: string;
+  classificacao: string | null;
+  riskScore: number | null;
+}
+
+export interface IdentityMatch {
+  candidateId: string;
+  candidateSourceType: string;
+  candidateNome: string;
+  candidateDocumento: string;
+  confidenceScore: number;
+  nivelConfianca: "ALTA" | "MEDIA" | "BAIXA";
+  decision: "MATCH" | "POSSIBLE_MATCH" | "NO_MATCH";
+  signals: IdentityMatchSignal[];
+  dossie: IdentityMatchDossie | null;
+}
+
+export interface RiskEntityEntry {
+  dossieId: string;
+  nome: string;
+  riskScore: number;
+  classificacao: string;
+}
+
 export interface AnalyticsSummary {
   totalPessoas: number;
   totalEmpresas: number;
@@ -40,6 +72,8 @@ export interface AnalyticsSummary {
   fatoresMaisFrequentes: FactorCount[];
   metricasPorFonte: SourceMetric[];
   evolucaoTemporal: TemporalDataPoint[];
+  empresasEmMaiorRisco: RiskEntityEntry[];
+  alertas: string[];
 }
 
 export type CaseStatus =
@@ -84,6 +118,15 @@ export interface ImportBatchSummary {
   status: ImportBatchStatus;
   revertidoEm: string | null;
   motivoReversao: string | null;
+  iniciadoPorUsuarioId: string | null;
+}
+
+export interface ImportEmpresasResult {
+  importBatchId: string;
+  totalLinhas: number;
+  contagens: ImportBatchSummary["contagens"];
+  empresasProcessadas: number;
+  dossiesCriados: number;
 }
 
 export type ScheduledJobStatus = "PENDENTE" | "EXECUTANDO" | "CONCLUIDO" | "MORTO";
@@ -129,6 +172,34 @@ export interface DossieVersionEntry {
   usuarioId: string | null;
   hash: string;
   resumoMudancas: string[];
+}
+
+export interface DossieFatorRisco {
+  nome: string;
+  peso: number;
+  direcao: "AUMENTA_RISCO" | "REDUZ_RISCO";
+  justificativa: string;
+  fonte: string;
+}
+
+export interface DossieRecomendacao {
+  canal: string;
+  justificativa: string;
+}
+
+export interface DossieVersionSnapshotDetail {
+  id: string;
+  dossieId: string;
+  versao: number;
+  timestamp: string;
+  usuarioId: string | null;
+  classificacao: string;
+  justificativaGeral: string;
+  fatores: DossieFatorRisco[];
+  recomendacoes: DossieRecomendacao[];
+  confidenceScore: number;
+  riskScore: number;
+  hash: string;
 }
 
 export interface AuditEventSummary {

@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import {
   Bar,
   BarChart,
@@ -12,9 +13,12 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { Link } from "react-router-dom";
 import { apiClient } from "../lib/api-client";
 import { useApi } from "../hooks/useApi";
 import type { AnalyticsSummary } from "../types/api";
+import { RiskBadge } from "../components/ui/Badge";
+import { Button } from "../components/ui/Button";
 import { Card, CardBody, CardHeader } from "../components/ui/Card";
 import { KpiCard } from "../components/ui/KpiCard";
 import { LoadingSkeleton, ErrorState } from "../components/ui/States";
@@ -35,6 +39,22 @@ function formatPercent(value: number): string {
   return `${(value * 100).toFixed(0)}%`;
 }
 
+/** `metricasPorFonte[].percentualRespondida` já vem em escala 0-100 do backend (`AnalyticsSummaryBuilder`) — diferente de `confiancaMedia`/`scoreMedio` (fração 0-1). Multiplicar de novo por 100 aqui produzia "10000%". */
+function formatAlreadyPercent(value: number): string {
+  return `${value.toFixed(0)}%`;
+}
+
+/** Tooltip do Recharts não herda as variáveis de tema por padrão — sem isso, o texto fica ilegível (claro sobre claro/escuro sobre escuro dependendo do tema ativo). */
+const TOOLTIP_CONTENT_STYLE: CSSProperties = {
+  backgroundColor: "var(--color-bg-elevated)",
+  border: "1px solid var(--color-border)",
+  borderRadius: "var(--radius-sm)",
+  color: "var(--color-text)",
+  fontSize: "12px",
+};
+const TOOLTIP_LABEL_STYLE: CSSProperties = { color: "var(--color-text)" };
+const TOOLTIP_ITEM_STYLE: CSSProperties = { color: "var(--color-text)" };
+
 export function ExecutiveDashboardPage() {
   const { data, error, errorCode, isLoading, reload } = useApi(
     () => apiClient.get<AnalyticsSummary>("/analytics/summary"),
@@ -44,6 +64,33 @@ export function ExecutiveDashboardPage() {
   if (isLoading) return <LoadingSkeleton rows={6} />;
   if (error || !data)
     return <ErrorState message={error ?? "Sem dados"} onRetry={reload} code={errorCode} />;
+
+  if (data.totalDossiesAnalisados === 0) {
+    return (
+      <Card>
+        <CardBody className="flex flex-col items-center gap-4 py-16 text-center">
+          <span className="text-4xl" aria-hidden>
+            📊
+          </span>
+          <div>
+            <p className="text-base font-semibold" style={{ color: "var(--color-text)" }}>
+              Você ainda não possui empresas cadastradas
+            </p>
+            <p
+              className="mx-auto mt-2 max-w-md text-sm"
+              style={{ color: "var(--color-text-muted)" }}
+            >
+              Importe sua carteira de clientes para gerar dossiês, classificação de risco e
+              recomendações automaticamente. Nenhum dado é exibido aqui até sua primeira importação.
+            </p>
+          </div>
+          <Link to="/app/importacoes">
+            <Button>📥 Importar planilha</Button>
+          </Link>
+        </CardBody>
+      </Card>
+    );
+  }
 
   const distribuicaoRisco = Object.entries(data.distribuicaoRisco).map(
     ([classificacao, total]) => ({
@@ -58,9 +105,9 @@ export function ExecutiveDashboardPage() {
     <div className="space-y-6">
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <KpiCard
-          label="Pessoas cadastradas"
-          value={data.totalPessoas.toLocaleString("pt-BR")}
-          icon="👤"
+          label="Entidades analisadas"
+          value={(data.totalPessoas + data.totalEmpresas).toLocaleString("pt-BR")}
+          icon="🏢"
         />
         <KpiCard
           label="Dossiês analisados"
@@ -105,7 +152,11 @@ export function ExecutiveDashboardPage() {
                       <Cell key={entry.classificacao} fill={entry.color} />
                     ))}
                   </Pie>
-                  <Tooltip />
+                  <Tooltip
+                    contentStyle={TOOLTIP_CONTENT_STYLE}
+                    labelStyle={TOOLTIP_LABEL_STYLE}
+                    itemStyle={TOOLTIP_ITEM_STYLE}
+                  />
                 </PieChart>
               </ResponsiveContainer>
             )}
@@ -144,7 +195,11 @@ export function ExecutiveDashboardPage() {
                     stroke="var(--color-text-subtle)"
                   />
                   <YAxis tick={{ fontSize: 11 }} stroke="var(--color-text-subtle)" />
-                  <Tooltip />
+                  <Tooltip
+                    contentStyle={TOOLTIP_CONTENT_STYLE}
+                    labelStyle={TOOLTIP_LABEL_STYLE}
+                    itemStyle={TOOLTIP_ITEM_STYLE}
+                  />
                   <Line
                     type="monotone"
                     dataKey="scoreMedio"
@@ -191,7 +246,11 @@ export function ExecutiveDashboardPage() {
                     width={110}
                     stroke="var(--color-text-subtle)"
                   />
-                  <Tooltip />
+                  <Tooltip
+                    contentStyle={TOOLTIP_CONTENT_STYLE}
+                    labelStyle={TOOLTIP_LABEL_STYLE}
+                    itemStyle={TOOLTIP_ITEM_STYLE}
+                  />
                   <Bar dataKey="total" fill="var(--color-primary)" radius={[0, 4, 4, 0]} />
                 </BarChart>
               </ResponsiveContainer>
@@ -215,7 +274,7 @@ export function ExecutiveDashboardPage() {
                   <div className="mb-1 flex items-center justify-between text-xs">
                     <span style={{ color: "var(--color-text)" }}>{metrica.fonte}</span>
                     <span style={{ color: "var(--color-text-muted)" }}>
-                      {formatPercent(metrica.percentualRespondida)}
+                      {formatAlreadyPercent(metrica.percentualRespondida)}
                     </span>
                   </div>
                   <div
@@ -225,11 +284,66 @@ export function ExecutiveDashboardPage() {
                     <div
                       className="h-full rounded-full"
                       style={{
-                        width: formatPercent(metrica.percentualRespondida),
+                        width: formatAlreadyPercent(metrica.percentualRespondida),
                         backgroundColor: "var(--color-accent)",
                       }}
                     />
                   </div>
+                </div>
+              ))
+            )}
+          </CardBody>
+        </Card>
+      </div>
+
+      <div className="grid gap-5 lg:grid-cols-2">
+        <Card>
+          <CardHeader
+            title="Empresas em maior risco"
+            subtitle="Top 5 por score de risco na carteira atual"
+          />
+          <CardBody className="space-y-2">
+            {data.empresasEmMaiorRisco.length === 0 ? (
+              <p className="py-8 text-center text-sm" style={{ color: "var(--color-text-muted)" }}>
+                Nenhuma empresa classificada ainda
+              </p>
+            ) : (
+              data.empresasEmMaiorRisco.map((empresa) => (
+                <Link
+                  key={empresa.dossieId}
+                  to={`/app/dossies/${empresa.dossieId}`}
+                  className="flex items-center justify-between rounded-[var(--radius-sm)] border p-2.5 text-sm transition-colors hover:bg-[var(--color-bg-muted)]"
+                  style={{ borderColor: "var(--color-border)" }}
+                >
+                  <span style={{ color: "var(--color-text)" }}>{empresa.nome}</span>
+                  <span className="flex items-center gap-2">
+                    <span className="tabular-nums" style={{ color: "var(--color-text-muted)" }}>
+                      {empresa.riskScore.toFixed(2)}
+                    </span>
+                    <RiskBadge classificacao={empresa.classificacao} />
+                  </span>
+                </Link>
+              ))
+            )}
+          </CardBody>
+        </Card>
+
+        <Card>
+          <CardHeader title="Alertas" subtitle="Derivados dos dados importados, nunca fixos" />
+          <CardBody className="space-y-2">
+            {data.alertas.length === 0 ? (
+              <p className="py-8 text-center text-sm" style={{ color: "var(--color-text-muted)" }}>
+                Nenhum alerta no momento
+              </p>
+            ) : (
+              data.alertas.map((alerta, index) => (
+                <div
+                  key={index}
+                  className="flex items-start gap-2 rounded-[var(--radius-sm)] border p-2.5 text-sm"
+                  style={{ borderColor: "var(--color-border)", color: "var(--color-text)" }}
+                >
+                  <span aria-hidden>⚠️</span>
+                  <span>{alerta}</span>
                 </div>
               ))
             )}

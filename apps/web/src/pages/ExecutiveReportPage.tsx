@@ -17,6 +17,11 @@ function formatPercent(value: number): string {
   return `${(value * 100).toFixed(1)}%`;
 }
 
+/** `metricasPorFonte[].percentualRespondida` já vem em escala 0-100 do backend — ver mesmo comentário em `ExecutiveDashboardPage.tsx`. */
+function formatAlreadyPercent(value: number): string {
+  return `${value.toFixed(1)}%`;
+}
+
 function formatGeneratedAt(): string {
   return new Date().toLocaleString("pt-BR", { dateStyle: "long", timeStyle: "short" });
 }
@@ -131,6 +136,40 @@ export function ExecutiveReportPage() {
               className="mb-3 text-sm font-semibold uppercase tracking-wide"
               style={{ color: "var(--color-text-muted)" }}
             >
+              Empresas em maior risco
+            </h2>
+            <ReportTable
+              headers={["Empresa", "Score de risco", "Classificação"]}
+              rows={data.empresasEmMaiorRisco.map((empresa) => [
+                empresa.nome,
+                empresa.riskScore.toFixed(2),
+                RISK_LABEL[empresa.classificacao] ?? empresa.classificacao,
+              ])}
+              emptyMessage="Nenhuma empresa classificada ainda"
+            />
+          </section>
+
+          {data.alertas.length > 0 ? (
+            <section>
+              <h2
+                className="mb-3 text-sm font-semibold uppercase tracking-wide"
+                style={{ color: "var(--color-text-muted)" }}
+              >
+                Alertas
+              </h2>
+              <ul className="space-y-1 text-sm" style={{ color: "var(--color-text)" }}>
+                {data.alertas.map((alerta, index) => (
+                  <li key={index}>⚠️ {alerta}</li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+
+          <section>
+            <h2
+              className="mb-3 text-sm font-semibold uppercase tracking-wide"
+              style={{ color: "var(--color-text-muted)" }}
+            >
               Canais de contato mais recomendados
             </h2>
             <ReportTable
@@ -171,7 +210,7 @@ export function ExecutiveReportPage() {
               headers={["Fonte", "% de dossiês respondidos"]}
               rows={data.metricasPorFonte.map((metrica) => [
                 metrica.fonte,
-                formatPercent(metrica.percentualRespondida),
+                formatAlreadyPercent(metrica.percentualRespondida),
               ])}
               emptyMessage="Nenhuma fonte consultada ainda"
             />

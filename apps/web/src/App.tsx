@@ -35,6 +35,12 @@ const DossiePage = lazy(() =>
 const RelationshipGraphPage = lazy(() =>
   import("./pages/RelationshipGraphPage").then((m) => ({ default: m.RelationshipGraphPage })),
 );
+const ConsultaPage = lazy(() =>
+  import("./pages/ConsultaPage").then((m) => ({ default: m.ConsultaPage })),
+);
+const ImportacoesPage = lazy(() =>
+  import("./pages/ImportacoesPage").then((m) => ({ default: m.ImportacoesPage })),
+);
 const ExecutiveReportPage = lazy(() =>
   import("./pages/ExecutiveReportPage").then((m) => ({ default: m.ExecutiveReportPage })),
 );
@@ -104,10 +110,26 @@ export function App() {
                     }
                   />
                   <Route
+                    path="/app/consulta"
+                    element={
+                      <AppShell title="Consultar CPF/CNPJ">
+                        <ConsultaPage />
+                      </AppShell>
+                    }
+                  />
+                  <Route
                     path="/app/relacionamentos"
                     element={
                       <AppShell title="Relacionamentos societários">
                         <RelationshipGraphPage />
+                      </AppShell>
+                    }
+                  />
+                  <Route
+                    path="/app/importacoes"
+                    element={
+                      <AppShell title="Importações">
+                        <ImportacoesPage />
                       </AppShell>
                     }
                   />
