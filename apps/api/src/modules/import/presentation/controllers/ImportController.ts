@@ -8,6 +8,7 @@ import type { ListImportBatchesUseCase } from "../../application/use-cases/ListI
 import type { PreviewImportSpreadsheetUseCase } from "../../application/use-cases/PreviewImportSpreadsheetUseCase.js";
 import type { ResolveImportRowIdentityUseCase } from "../../application/use-cases/ResolveImportRowIdentityUseCase.js";
 import type { RollbackImportBatchUseCase } from "../../application/use-cases/RollbackImportBatchUseCase.js";
+import type { RegisterTenantResourceUseCase } from "../../../tenant/application/use-cases/RegisterTenantResourceUseCase.js";
 import { parseRequestBody } from "../../../../presentation/http/validation.js";
 import {
   listImportBatchesQuerySchema,
@@ -28,9 +29,14 @@ export class ImportController {
     private readonly previewImportSpreadsheetUseCase: PreviewImportSpreadsheetUseCase,
     private readonly rollbackImportBatchUseCase: RollbackImportBatchUseCase,
     private readonly listImportBatchesUseCase: ListImportBatchesUseCase,
+    private readonly registerTenantResourceUseCase: RegisterTenantResourceUseCase,
   ) {}
 
   importar = async (req: Request, res: Response): Promise<void> => {
+    if (!req.auth) {
+      throw new AppError("UNAUTHORIZED", "Não autenticado");
+    }
+
     const file = (req as Request & { file?: UploadedFile }).file;
     if (!file) {
       throw new AppError("VALIDATION", "Arquivo não enviado (campo 'file' obrigatório)");
@@ -39,6 +45,13 @@ export class ImportController {
     const resultadoImportacao = await this.importPgfnSpreadsheetUseCase.execute({
       fileBuffer: file.buffer,
       nomeArquivo: file.originalname,
+      iniciadoPorUsuarioId: req.auth.userId,
+    });
+
+    await this.registerTenantResourceUseCase.execute({
+      tenantId: req.auth.tenantId,
+      resourceType: "ImportBatch",
+      resourceId: resultadoImportacao.importBatchId,
     });
 
     const resultadoResolucao = await this.resolveImportRowIdentityUseCase.execute(
@@ -85,19 +98,21 @@ export class ImportController {
   };
 
   list = async (req: Request, res: Response): Promise<void> => {
+    if (!req.auth) {
+      throw new AppError("UNAUTHORIZED", "Não autenticado");
+    }
+
     const query = parseRequestBody(listImportBatchesQuerySchema, req.query);
-    const pagina = await this.listImportBatchesUseCase.execute({
+    const pagina = await this.listImportBatchesUseCase.execute(req.auth.tenantId, {
       page: query.page ?? 1,
       pageSize: query.pageSize ?? 50,
     });
-    res
-      .status(200)
-      .json({
-        items: pagina.items.map(toBatchSummary),
-        total: pagina.total,
-        page: pagina.page,
-        pageSize: pagina.pageSize,
-      });
+    res.status(200).json({
+      items: pagina.items.map(toBatchSummary),
+      total: pagina.total,
+      page: pagina.page,
+      pageSize: pagina.pageSize,
+    });
   };
 }
 
@@ -113,5 +128,6 @@ function toBatchSummary(batch: ImportBatch) {
     status: batch.status,
     revertidoEm: batch.revertidoEm ? batch.revertidoEm.toISOString() : null,
     motivoReversao: batch.motivoReversao,
+    iniciadoPorUsuarioId: batch.iniciadoPorUsuarioId,
   };
 }

@@ -31,6 +31,7 @@ export class PrismaImportBatchRepository implements IImportBatchRepository {
       status: props.status,
       revertidoEm: props.revertidoEm,
       motivoReversao: props.motivoReversao,
+      iniciadoPorUsuarioId: props.iniciadoPorUsuarioId,
     };
 
     await this.prisma.importBatch.upsert({
@@ -38,6 +39,11 @@ export class PrismaImportBatchRepository implements IImportBatchRepository {
       create: { id: props.id, ...data },
       update: data,
     });
+  }
+
+  async deleteMany(ids: string[]): Promise<void> {
+    if (ids.length === 0) return;
+    await this.prisma.importBatch.deleteMany({ where: { id: { in: ids } } });
   }
 
   async count(): Promise<number> {
@@ -85,6 +91,7 @@ export class PrismaImportBatchRepository implements IImportBatchRepository {
       status: record.status,
       revertidoEm: record.revertidoEm,
       motivoReversao: record.motivoReversao,
+      iniciadoPorUsuarioId: record.iniciadoPorUsuarioId,
     });
   }
 }

@@ -15,6 +15,7 @@ import type { IImportSourceParser, ParsedImportRow } from "../ports/IImportSourc
 export interface ImportPgfnSpreadsheetInput {
   fileBuffer: Buffer;
   nomeArquivo: string;
+  iniciadoPorUsuarioId?: string | null;
 }
 
 export interface ImportPgfnSpreadsheetOutput {
@@ -60,6 +61,7 @@ export class ImportPgfnSpreadsheetUseCase {
       nomeArquivo: input.nomeArquivo,
       totalLinhas: parsed.rows.length,
       now,
+      iniciadoPorUsuarioId: input.iniciadoPorUsuarioId ?? null,
     });
 
     const documentosVistosNoLote = new Set<string>();

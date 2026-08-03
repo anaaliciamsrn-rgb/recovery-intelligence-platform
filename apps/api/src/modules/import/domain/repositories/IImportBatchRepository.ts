@@ -20,4 +20,6 @@ export interface IImportBatchRepository {
   /** Histórico de importações (Etapa 15, ADR 0034) — mais recentes primeiro. */
   findAll(): Promise<ImportBatch[]>;
   findMany(pagination: ImportBatchPagination): Promise<ImportBatchPage>;
+  /** Usado só por `ResetTenantImportedDataUseCase` (ADR 0037) — cascade do Prisma já apaga os `ImportRow` filhos. */
+  deleteMany(ids: string[]): Promise<void>;
 }

@@ -2,9 +2,11 @@ import { Router, type RequestHandler } from "express";
 import multer from "multer";
 import { asyncHandler } from "../../../../shared/async-handler.js";
 import type { ImportController } from "../controllers/ImportController.js";
+import type { ImportEmpresasController } from "../controllers/ImportEmpresasController.js";
 
 export interface ImportRoutesDependencies {
   importController: ImportController;
+  importEmpresasController: ImportEmpresasController;
   authenticate: RequestHandler;
 }
 
@@ -27,6 +29,24 @@ export function createImportRouter(deps: ImportRoutesDependencies): Router {
     asyncHandler(deps.importController.importar),
   );
   router.get("/", deps.authenticate, asyncHandler(deps.importController.list));
+
+  // Fluxo "Importar Empresas" (ADR 0037) — pipeline de negócio distinto do
+  // PGFN acima, mesmo módulo. Rotas literais ("empresas/modelo",
+  // "empresas/demo") não colidem com "/:id/dashboard"/"/:id/relatorio" por
+  // terem um segmento literal diferente na mesma posição.
+  router.post(
+    "/empresas",
+    deps.authenticate,
+    upload.single("file"),
+    asyncHandler(deps.importEmpresasController.importar),
+  );
+  router.get("/empresas/modelo", deps.authenticate, deps.importEmpresasController.modelo);
+  router.get("/empresas/demo", deps.authenticate, deps.importEmpresasController.demo);
+  router.delete(
+    "/empresas",
+    deps.authenticate,
+    asyncHandler(deps.importEmpresasController.resetar),
+  );
   router.post(
     "/preview",
     deps.authenticate,

@@ -22,6 +22,8 @@ export interface ImportBatchProps {
   status: ImportBatchStatus;
   revertidoEm: Date | null;
   motivoReversao: string | null;
+  /** Quem disparou a importação — nulo para lotes anteriores a esta fase (ADR 0037). */
+  iniciadoPorUsuarioId: string | null;
 }
 
 /**
@@ -41,6 +43,7 @@ export class ImportBatch {
     nomeArquivo: string;
     totalLinhas: number;
     now: Date;
+    iniciadoPorUsuarioId?: string | null;
   }): ImportBatch {
     return new ImportBatch({
       id: input.id,
@@ -53,6 +56,7 @@ export class ImportBatch {
       status: ImportBatchStatus.CONCLUIDO,
       revertidoEm: null,
       motivoReversao: null,
+      iniciadoPorUsuarioId: input.iniciadoPorUsuarioId ?? null,
     });
   }
 
@@ -98,6 +102,10 @@ export class ImportBatch {
 
   get motivoReversao(): string | null {
     return this.props.motivoReversao;
+  }
+
+  get iniciadoPorUsuarioId(): string | null {
+    return this.props.iniciadoPorUsuarioId;
   }
 
   registrarContagem(status: keyof ImportBatchCounts): void {

@@ -12,6 +12,26 @@ import type {
   IImportSourceParser,
   ParsedImportBatch,
 } from "../../../src/modules/import/application/ports/IImportSourceParser.js";
+import type {
+  IReceitaFederalProvider,
+  ReceitaFederalLookupResult,
+} from "../../../src/modules/import/application/ports/IReceitaFederalProvider.js";
+import type { Tenant } from "../../../src/modules/tenant/domain/entities/Tenant.js";
+import type { TenantResourceOwnership } from "../../../src/modules/tenant/domain/entities/TenantResourceOwnership.js";
+import type { ITenantRepository } from "../../../src/modules/tenant/domain/repositories/ITenantRepository.js";
+import type { ITenantResourceOwnershipRepository } from "../../../src/modules/tenant/domain/repositories/ITenantResourceOwnershipRepository.js";
+
+export class FakeReceitaFederalProvider implements IReceitaFederalProvider {
+  constructor(private result: ReceitaFederalLookupResult = { status: "NAO_ENCONTRADO" }) {}
+
+  async consultar(): Promise<ReceitaFederalLookupResult> {
+    return this.result;
+  }
+
+  setResult(result: ReceitaFederalLookupResult): void {
+    this.result = result;
+  }
+}
 
 export class FakeImportBatchRepository implements IImportBatchRepository {
   private readonly batchesById = new Map<string, ImportBatch>();
@@ -43,6 +63,10 @@ export class FakeImportBatchRepository implements IImportBatchRepository {
       page: pagination.page,
       pageSize: pagination.pageSize,
     };
+  }
+
+  async deleteMany(ids: string[]): Promise<void> {
+    for (const id of ids) this.batchesById.delete(id);
   }
 
   seed(batch: ImportBatch): void {
@@ -94,6 +118,73 @@ export class FakeIdGenerator implements IIdGenerator {
   generateId(): string {
     this.counter += 1;
     return `id-${this.counter}`;
+  }
+}
+
+export class FakeTenantRepository implements ITenantRepository {
+  private readonly tenantsById = new Map<string, Tenant>();
+
+  async findById(id: string): Promise<Tenant | null> {
+    return this.tenantsById.get(id) ?? null;
+  }
+
+  async findBySlug(slug: string): Promise<Tenant | null> {
+    for (const tenant of this.tenantsById.values()) {
+      if (tenant.slug === slug) return tenant;
+    }
+    return null;
+  }
+
+  async save(tenant: Tenant): Promise<void> {
+    this.tenantsById.set(tenant.id, tenant);
+  }
+
+  async findAll(): Promise<Tenant[]> {
+    return [...this.tenantsById.values()];
+  }
+
+  seed(tenant: Tenant): void {
+    this.tenantsById.set(tenant.id, tenant);
+  }
+}
+
+export class FakeTenantResourceOwnershipRepository implements ITenantResourceOwnershipRepository {
+  private readonly ownerships: TenantResourceOwnership[] = [];
+
+  async save(ownership: TenantResourceOwnership): Promise<void> {
+    this.ownerships.push(ownership);
+  }
+
+  async findByResource(
+    resourceType: string,
+    resourceId: string,
+  ): Promise<TenantResourceOwnership | null> {
+    return (
+      this.ownerships.find(
+        (ownership) =>
+          ownership.resourceType === resourceType && ownership.resourceId === resourceId,
+      ) ?? null
+    );
+  }
+
+  async listResourceIds(tenantId: string, resourceType: string): Promise<string[]> {
+    return this.ownerships
+      .filter(
+        (ownership) => ownership.tenantId === tenantId && ownership.resourceType === resourceType,
+      )
+      .map((ownership) => ownership.resourceId);
+  }
+
+  async deleteByTenantAndType(tenantId: string, resourceType: string): Promise<void> {
+    const remaining = this.ownerships.filter(
+      (ownership) => !(ownership.tenantId === tenantId && ownership.resourceType === resourceType),
+    );
+    this.ownerships.length = 0;
+    this.ownerships.push(...remaining);
+  }
+
+  seed(ownership: TenantResourceOwnership): void {
+    this.ownerships.push(ownership);
   }
 }
 
