@@ -12,4 +12,6 @@ export interface IVersionSnapshotRepository {
   findLatestPerDossie(): Promise<VersionSnapshot[]>;
   /** Todas as versões de todos os Dossiês — usado por `analytics` para evolução temporal. Não escala para volume real (ver ADR 0025), mesma ressalva já registrada para `findAll()` em `party` (ADR 0019). */
   findAll(): Promise<VersionSnapshot[]>;
+  /** Exceção deliberada ao "append-only" da classe — usado só por `ResetTenantImportedDataUseCase` (ADR 0037) para desfazer uma importação de demonstração antes de uma apresentação, nunca por nenhum fluxo de negócio normal. */
+  deleteByDossieIds(dossieIds: string[]): Promise<void>;
 }

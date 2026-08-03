@@ -1,7 +1,9 @@
 import type { Request, Response } from "express";
+import { AppError } from "../../../../application/errors/AppError.js";
 import { parseRequestBody } from "../../../../presentation/http/validation.js";
 import type { Evidence } from "../../../../domain/value-objects/Evidence.js";
 import type { Dossie, DossieEvidencias } from "../../domain/entities/Dossie.js";
+import type { RegisterTenantResourceUseCase } from "../../../tenant/application/use-cases/RegisterTenantResourceUseCase.js";
 import type { CreateDossieUseCase } from "../../application/use-cases/CreateDossieUseCase.js";
 import type { GetDossieUseCase } from "../../application/use-cases/GetDossieUseCase.js";
 import type { RegistrarEvidenciaUseCase } from "../../application/use-cases/RegistrarEvidenciaUseCase.js";
@@ -10,16 +12,34 @@ import {
   registrarEvidenciaRequestSchema,
 } from "../validators/dossie.validators.js";
 
+/**
+ * `create` registra a propriedade do novo Dossiê ao tenant do chamador via
+ * `TenantResourceOwnership` (ADR 0037) — mesmo mecanismo usado pelo
+ * pipeline "Importar Empresas", agora aplicado também ao endpoint genérico
+ * de criação de Dossiê, para que `analytics` (tenant-scoped) veja
+ * corretamente qualquer Dossiê criado por qualquer caminho, não só pela
+ * importação.
+ */
 export class DossieController {
   constructor(
     private readonly createDossieUseCase: CreateDossieUseCase,
     private readonly getDossieUseCase: GetDossieUseCase,
     private readonly registrarEvidenciaUseCase: RegistrarEvidenciaUseCase,
+    private readonly registerTenantResourceUseCase: RegisterTenantResourceUseCase,
   ) {}
 
   create = async (req: Request, res: Response): Promise<void> => {
+    if (!req.auth) {
+      throw new AppError("UNAUTHORIZED", "Não autenticado");
+    }
+
     const body = parseRequestBody(createDossieRequestSchema, req.body);
     const dossie = await this.createDossieUseCase.execute(body);
+    await this.registerTenantResourceUseCase.execute({
+      tenantId: req.auth.tenantId,
+      resourceType: "Dossie",
+      resourceId: dossie.id,
+    });
     res.status(201).json(dossie);
   };
 

@@ -5,6 +5,9 @@ import type { Env } from "../../shared/config/env.js";
 import { createAuthenticateMiddleware } from "../identity/presentation/middlewares/authenticate.middleware.js";
 import { PrismaEmpresaRepository } from "../party/infrastructure/persistence/PrismaEmpresaRepository.js";
 import { PrismaPessoaRepository } from "../party/infrastructure/persistence/PrismaPessoaRepository.js";
+import { RegisterTenantResourceUseCase } from "../tenant/application/use-cases/RegisterTenantResourceUseCase.js";
+import { PrismaTenantRepository } from "../tenant/infrastructure/persistence/PrismaTenantRepository.js";
+import { PrismaTenantResourceOwnershipRepository } from "../tenant/infrastructure/persistence/PrismaTenantResourceOwnershipRepository.js";
 import { CreateDossieUseCase } from "./application/use-cases/CreateDossieUseCase.js";
 import { GetDossieUseCase } from "./application/use-cases/GetDossieUseCase.js";
 import { RegistrarEvidenciaUseCase } from "./application/use-cases/RegistrarEvidenciaUseCase.js";
@@ -50,10 +53,24 @@ export function buildDossieModule(deps: DossieModuleDependencies): DossieModule 
   const getDossieUseCase = new GetDossieUseCase(dossieRepository);
   const registrarEvidenciaUseCase = new RegistrarEvidenciaUseCase(dossieRepository, clock);
 
+  // Duplicação deliberada das peças de `tenant` (mesmo padrão do resto da
+  // plataforma, ver ADR 0037) — todo Dossiê criado por qualquer caminho
+  // precisa de um `TenantResourceOwnership` para `analytics` conseguir
+  // agregá-lo corretamente por tenant.
+  const tenantRepository = new PrismaTenantRepository(prisma);
+  const tenantResourceOwnershipRepository = new PrismaTenantResourceOwnershipRepository(prisma);
+  const registerTenantResourceUseCase = new RegisterTenantResourceUseCase(
+    tenantRepository,
+    tenantResourceOwnershipRepository,
+    idGenerator,
+    clock,
+  );
+
   const dossieController = new DossieController(
     createDossieUseCase,
     getDossieUseCase,
     registrarEvidenciaUseCase,
+    registerTenantResourceUseCase,
   );
   const dossieRouter = createDossieRouter({ dossieController, authenticate });
 

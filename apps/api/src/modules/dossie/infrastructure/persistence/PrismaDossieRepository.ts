@@ -18,6 +18,25 @@ export class PrismaDossieRepository implements IDossieRepository {
     return record ? this.toDomain(record) : null;
   }
 
+  async findBySubject(subjectType: DossieSubjectType, subjectId: string): Promise<Dossie | null> {
+    const record = await this.prisma.dossie.findFirst({
+      where: { subjectType, subjectId },
+      orderBy: { createdAt: "desc" },
+    });
+    return record ? this.toDomain(record) : null;
+  }
+
+  async findManyByIds(ids: string[]): Promise<Dossie[]> {
+    if (ids.length === 0) return [];
+    const records = await this.prisma.dossie.findMany({ where: { id: { in: ids } } });
+    return records.map((record) => this.toDomain(record));
+  }
+
+  async deleteMany(ids: string[]): Promise<void> {
+    if (ids.length === 0) return;
+    await this.prisma.dossie.deleteMany({ where: { id: { in: ids } } });
+  }
+
   async save(dossie: Dossie): Promise<void> {
     const props = dossie.toProps();
 

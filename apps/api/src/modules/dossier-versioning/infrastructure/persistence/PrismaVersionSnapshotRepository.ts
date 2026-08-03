@@ -90,6 +90,11 @@ export class PrismaVersionSnapshotRepository implements IVersionSnapshotReposito
     return records.map((record) => this.toDomain(record));
   }
 
+  async deleteByDossieIds(dossieIds: string[]): Promise<void> {
+    if (dossieIds.length === 0) return;
+    await this.prisma.versionSnapshot.deleteMany({ where: { dossieId: { in: dossieIds } } });
+  }
+
   private toDomain(record: PrismaVersionSnapshotRecord): VersionSnapshot {
     return VersionSnapshot.create({
       id: record.id,

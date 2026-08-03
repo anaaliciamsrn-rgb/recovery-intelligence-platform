@@ -52,6 +52,13 @@ export class FakeVersionSnapshotRepository implements IVersionSnapshotRepository
   seed(snapshot: VersionSnapshot): void {
     this.snapshotsById.set(snapshot.id, snapshot);
   }
+
+  async deleteByDossieIds(dossieIds: string[]): Promise<void> {
+    const idSet = new Set(dossieIds);
+    for (const [id, snapshot] of this.snapshotsById) {
+      if (idSet.has(snapshot.dossieId)) this.snapshotsById.delete(id);
+    }
+  }
 }
 
 export class FakeIdGenerator implements IIdGenerator {
