@@ -263,6 +263,10 @@ model ImportBatch {
   status          ImportBatchStatus @default(CONCLUIDO)
   revertidoEm     DateTime?         @map("revertido_em")
   motivoReversao  String?           @map("motivo_reversao")
+  /// Referência solta (sem `@relation`), mesmo padrão do resto do schema —
+  /// quem disparou a importação (ex.: "Importar Empresas", ADR 0037).
+  /// Nulo para lotes anteriores a esta fase.
+  iniciadoPorUsuarioId String?      @map("iniciado_por_usuario_id")
   createdAt       DateTime          @default(now()) @map("created_at")
   linhas          ImportRow[]
 
