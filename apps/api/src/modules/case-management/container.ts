@@ -6,6 +6,7 @@ import { PrismaDossieRepository } from "../dossie/infrastructure/persistence/Pri
 import { Permission } from "../identity/domain/value-objects/Permission.js";
 import { createAuthenticateMiddleware } from "../identity/presentation/middlewares/authenticate.middleware.js";
 import { createAuthorizeMiddleware } from "../identity/presentation/middlewares/authorize.middleware.js";
+import { PrismaTenantResourceOwnershipRepository } from "../tenant/infrastructure/persistence/PrismaTenantResourceOwnershipRepository.js";
 import { AddCaseNoteUseCase } from "./application/use-cases/AddCaseNoteUseCase.js";
 import { CreateCaseUseCase } from "./application/use-cases/CreateCaseUseCase.js";
 import { GetCaseUseCase } from "./application/use-cases/GetCaseUseCase.js";
@@ -78,7 +79,8 @@ export function buildCaseManagementModule(
     caseNoteRepository,
     caseHistoryRepository,
   );
-  const listCasesUseCase = new ListCasesUseCase(caseRepository);
+  const tenantResourceOwnershipRepository = new PrismaTenantResourceOwnershipRepository(prisma);
+  const listCasesUseCase = new ListCasesUseCase(caseRepository, tenantResourceOwnershipRepository);
 
   const caseController = new CaseController(
     createCaseUseCase,

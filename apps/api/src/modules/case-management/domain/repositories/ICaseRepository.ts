@@ -25,4 +25,15 @@ export interface ICaseRepository {
   findById(id: string): Promise<Case | null>;
   save(caso: Case): Promise<void>;
   findMany(filter: CaseFilter, pagination: CasePagination): Promise<CasePage>;
+  /**
+   * Mesmo filtro de `findMany`, restrito a um conjunto de `dossieId`s —
+   * usado por `ListCasesUseCase` (ADR 0037) para tenant-scoping: um Case
+   * não tem `TenantResourceOwnership` próprio, pertence ao tenant
+   * transitivamente através do seu Dossiê.
+   */
+  findManyByDossieIds(
+    dossieIds: string[],
+    filter: CaseFilter,
+    pagination: CasePagination,
+  ): Promise<CasePage>;
 }

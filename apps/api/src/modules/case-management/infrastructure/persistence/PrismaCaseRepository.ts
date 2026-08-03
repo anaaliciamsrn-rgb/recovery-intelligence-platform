@@ -63,6 +63,44 @@ export class PrismaCaseRepository implements ICaseRepository {
     };
   }
 
+  async findManyByDossieIds(
+    dossieIds: string[],
+    filter: CaseFilter,
+    pagination: CasePagination,
+  ): Promise<CasePage> {
+    if (dossieIds.length === 0) {
+      return { items: [], total: 0, page: pagination.page, pageSize: pagination.pageSize };
+    }
+    if (filter.dossieId && !dossieIds.includes(filter.dossieId)) {
+      return { items: [], total: 0, page: pagination.page, pageSize: pagination.pageSize };
+    }
+
+    const where: Prisma.CaseWhereInput = {
+      dossieId: filter.dossieId ? filter.dossieId : { in: dossieIds },
+      ...(filter.status ? { status: filter.status } : {}),
+      ...(filter.ownerId ? { ownerId: filter.ownerId } : {}),
+      ...(filter.priority ? { priority: filter.priority } : {}),
+    };
+    const skip = (pagination.page - 1) * pagination.pageSize;
+
+    const [records, total] = await Promise.all([
+      this.prisma.case.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        skip,
+        take: pagination.pageSize,
+      }),
+      this.prisma.case.count({ where }),
+    ]);
+
+    return {
+      items: records.map((record) => this.toDomain(record)),
+      total,
+      page: pagination.page,
+      pageSize: pagination.pageSize,
+    };
+  }
+
   private toDomain(record: PrismaCaseRecord): Case {
     return Case.create({
       id: record.id,

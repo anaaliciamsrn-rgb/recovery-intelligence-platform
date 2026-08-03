@@ -40,6 +40,28 @@ export class FakeCaseRepository implements ICaseRepository {
     };
   }
 
+  async findManyByDossieIds(
+    dossieIds: string[],
+    filter: CaseFilter,
+    pagination: CasePagination,
+  ): Promise<CasePage> {
+    const allowed = new Set(dossieIds);
+    let items = [...this.casesById.values()].filter((c) => allowed.has(c.dossieId));
+    if (filter.status) items = items.filter((c) => c.status === filter.status);
+    if (filter.ownerId) items = items.filter((c) => c.ownerId === filter.ownerId);
+    if (filter.priority) items = items.filter((c) => c.priority === filter.priority);
+    if (filter.dossieId) items = items.filter((c) => c.dossieId === filter.dossieId);
+    items.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    const total = items.length;
+    const start = (pagination.page - 1) * pagination.pageSize;
+    return {
+      items: items.slice(start, start + pagination.pageSize),
+      total,
+      page: pagination.page,
+      pageSize: pagination.pageSize,
+    };
+  }
+
   seed(caso: Case): void {
     this.casesById.set(caso.id, caso);
   }

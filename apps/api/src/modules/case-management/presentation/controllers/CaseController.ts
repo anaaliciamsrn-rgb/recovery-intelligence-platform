@@ -1,4 +1,5 @@
 import type { Request, Response } from "express";
+import { AppError } from "../../../../application/errors/AppError.js";
 import { parseRequestBody } from "../../../../presentation/http/validation.js";
 import type { Case } from "../../domain/entities/Case.js";
 import type { CaseHistoryEntry } from "../../domain/entities/CaseHistoryEntry.js";
@@ -83,8 +84,13 @@ export class CaseController {
   };
 
   list = async (req: Request, res: Response): Promise<void> => {
+    if (!req.auth) {
+      throw new AppError("UNAUTHORIZED", "Não autenticado");
+    }
+
     const query = parseRequestBody(listCasesQuerySchema, req.query);
     const page = await this.listCasesUseCase.execute({
+      tenantId: req.auth.tenantId,
       filter: {
         ...(query.status ? { status: query.status } : {}),
         ...(query.ownerId ? { ownerId: query.ownerId } : {}),

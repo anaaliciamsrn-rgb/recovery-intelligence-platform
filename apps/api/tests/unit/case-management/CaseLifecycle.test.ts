@@ -4,6 +4,8 @@ import { GetCaseUseCase } from "../../../src/modules/case-management/application
 import { ListCasesUseCase } from "../../../src/modules/case-management/application/use-cases/ListCasesUseCase.js";
 import { UpdateCaseDetailsUseCase } from "../../../src/modules/case-management/application/use-cases/UpdateCaseDetailsUseCase.js";
 import { UpdateCaseStatusUseCase } from "../../../src/modules/case-management/application/use-cases/UpdateCaseStatusUseCase.js";
+import { TenantResourceOwnership } from "../../../src/modules/tenant/domain/entities/TenantResourceOwnership.js";
+import { FakeTenantResourceOwnershipRepository } from "../tenant/fakes.js";
 import {
   FakeCaseHistoryRepository,
   FakeCaseNoteRepository,
@@ -216,8 +218,29 @@ describe("ListCasesUseCase", () => {
     c2.transicionarStatus("EM_ANDAMENTO", NOW);
     caseRepository.seed(c2);
 
-    const useCase = new ListCasesUseCase(caseRepository);
+    const tenantResourceOwnershipRepository = new FakeTenantResourceOwnershipRepository();
+    tenantResourceOwnershipRepository.seed(
+      TenantResourceOwnership.create({
+        id: "o1",
+        tenantId: "tenant-1",
+        resourceType: "Dossie",
+        resourceId: "d1",
+        createdAt: NOW,
+      }),
+    );
+    tenantResourceOwnershipRepository.seed(
+      TenantResourceOwnership.create({
+        id: "o2",
+        tenantId: "tenant-1",
+        resourceType: "Dossie",
+        resourceId: "d2",
+        createdAt: NOW,
+      }),
+    );
+
+    const useCase = new ListCasesUseCase(caseRepository, tenantResourceOwnershipRepository);
     const pagina = await useCase.execute({
+      tenantId: "tenant-1",
       filter: { status: "EM_ANDAMENTO" },
       pagination: { page: 1, pageSize: 10 },
     });
