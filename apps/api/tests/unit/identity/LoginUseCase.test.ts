@@ -3,6 +3,9 @@ import { LoginUseCase } from "../../../src/modules/identity/application/use-case
 import { User } from "../../../src/modules/identity/domain/entities/User.js";
 import { Email } from "../../../src/modules/identity/domain/value-objects/Email.js";
 import { PasswordHash } from "../../../src/modules/identity/domain/value-objects/PasswordHash.js";
+import { CreateTenantUseCase } from "../../../src/modules/tenant/application/use-cases/CreateTenantUseCase.js";
+import { RegisterTenantResourceUseCase } from "../../../src/modules/tenant/application/use-cases/RegisterTenantResourceUseCase.js";
+import { TenantResourceOwnership } from "../../../src/modules/tenant/domain/entities/TenantResourceOwnership.js";
 import {
   FakeAuditLogRepository,
   FakeClock,
@@ -10,6 +13,8 @@ import {
   FakeLoginAttemptTracker,
   FakePasswordHasher,
   FakeSessionRepository,
+  FakeTenantRepository,
+  FakeTenantResourceOwnershipRepository,
   FakeTokenHasher,
   FakeTokenProvider,
   FakeUserRepository,
@@ -53,6 +58,26 @@ async function buildHarness(
   });
   userRepository.seed(user);
 
+  const tenantIdGenerator = new FakeIdGenerator();
+  const tenantRepository = new FakeTenantRepository();
+  const tenantResourceOwnershipRepository = new FakeTenantResourceOwnershipRepository();
+  tenantResourceOwnershipRepository.seed(
+    TenantResourceOwnership.create({
+      id: "ownership-1",
+      tenantId: "tenant-1",
+      resourceType: "User",
+      resourceId: user.id,
+      createdAt: NOW,
+    }),
+  );
+  const createTenantUseCase = new CreateTenantUseCase(tenantRepository, tenantIdGenerator, clock);
+  const registerTenantResourceUseCase = new RegisterTenantResourceUseCase(
+    tenantRepository,
+    tenantResourceOwnershipRepository,
+    tenantIdGenerator,
+    clock,
+  );
+
   const useCase = new LoginUseCase(
     userRepository,
     sessionRepository,
@@ -64,9 +89,20 @@ async function buildHarness(
     new FakeIdGenerator(),
     clock,
     CONFIG,
+    tenantRepository,
+    createTenantUseCase,
+    registerTenantResourceUseCase,
+    tenantResourceOwnershipRepository,
   );
 
-  return { useCase, userRepository, auditLogRepository, loginAttemptTracker, user };
+  return {
+    useCase,
+    userRepository,
+    auditLogRepository,
+    loginAttemptTracker,
+    user,
+    tenantResourceOwnershipRepository,
+  };
 }
 
 describe("LoginUseCase", () => {
@@ -140,6 +176,24 @@ describe("LoginUseCase", () => {
     expect(auditLogRepository.entries.at(-1)?.toProps().eventType).toBe(
       "LOGIN_FAILURE_ACCOUNT_LOCKED",
     );
+  });
+
+  it("autocura: provisiona um tenant na hora para uma conta sem TenantResourceOwnership", async () => {
+    const { useCase, tenantResourceOwnershipRepository, user } = await buildHarness();
+    // Simula uma conta inserida fora do fluxo de autocadastro (seed, script
+    // administrativo, conta herdada de antes do ADR 0037) — remove o
+    // registro que buildHarness já cria por padrão.
+    tenantResourceOwnershipRepository.clear();
+
+    await useCase.execute({
+      email: "user@example.com",
+      password: CORRECT_PASSWORD,
+      ipAddress: null,
+      userAgent: null,
+    });
+
+    const ownership = await tenantResourceOwnershipRepository.findByResource("User", user.id);
+    expect(ownership).not.toBeNull();
   });
 
   it("bloqueia por rate limit antes de tocar no repositório de usuários", async () => {

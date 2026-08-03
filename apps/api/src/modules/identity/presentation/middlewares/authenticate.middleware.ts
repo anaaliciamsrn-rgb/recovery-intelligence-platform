@@ -6,6 +6,7 @@ export interface AuthContext {
   userId: string;
   sessionId: string;
   roles: string[];
+  tenantId: string;
 }
 
 declare global {
@@ -33,7 +34,12 @@ export function createAuthenticateMiddleware(tokenProvider: ITokenProvider): Req
 
     try {
       const claims = tokenProvider.verifyAccessToken(token);
-      req.auth = { userId: claims.sub, sessionId: claims.sid, roles: claims.roles };
+      req.auth = {
+        userId: claims.sub,
+        sessionId: claims.sid,
+        roles: claims.roles,
+        tenantId: claims.tenantId,
+      };
       next();
     } catch {
       next(new AppError("UNAUTHORIZED", "Token de acesso inválido ou expirado"));

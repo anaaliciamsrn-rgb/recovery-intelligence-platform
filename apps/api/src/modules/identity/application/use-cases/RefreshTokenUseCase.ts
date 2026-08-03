@@ -2,10 +2,17 @@ import { AppError } from "../../../../application/errors/AppError.js";
 import type { ITokenProvider } from "../../../../application/ports/ITokenProvider.js";
 import { AuditLogEntry, type AuditEventType } from "../../domain/entities/AuditLogEntry.js";
 import { RefreshToken } from "../../domain/entities/RefreshToken.js";
+import type { User } from "../../domain/entities/User.js";
 import type { IAuditLogRepository } from "../../domain/repositories/IAuditLogRepository.js";
 import type { ISessionRepository } from "../../domain/repositories/ISessionRepository.js";
 import type { IUserRepository } from "../../domain/repositories/IUserRepository.js";
+import type { CreateTenantUseCase } from "../../../tenant/application/use-cases/CreateTenantUseCase.js";
+import type { RegisterTenantResourceUseCase } from "../../../tenant/application/use-cases/RegisterTenantResourceUseCase.js";
+import { Tenant } from "../../../tenant/domain/entities/Tenant.js";
+import type { ITenantRepository } from "../../../tenant/domain/repositories/ITenantRepository.js";
+import type { ITenantResourceOwnershipRepository } from "../../../tenant/domain/repositories/ITenantResourceOwnershipRepository.js";
 import type { IdentityModuleConfig } from "../IdentityModuleConfig.js";
+import { resolveTenantCandidateName } from "../resolveTenantCandidateName.js";
 import type { IClock } from "../ports/IClock.js";
 import type { IIdGenerator } from "../ports/IIdGenerator.js";
 import type { ITokenHasher } from "../ports/ITokenHasher.js";
@@ -38,6 +45,10 @@ export class RefreshTokenUseCase {
     private readonly idGenerator: IIdGenerator,
     private readonly clock: IClock,
     private readonly config: IdentityModuleConfig,
+    private readonly tenantRepository: ITenantRepository,
+    private readonly createTenantUseCase: CreateTenantUseCase,
+    private readonly registerTenantResourceUseCase: RegisterTenantResourceUseCase,
+    private readonly tenantResourceOwnershipRepository: ITenantResourceOwnershipRepository,
   ) {}
 
   async execute(input: RefreshTokenInput): Promise<RefreshTokenOutput> {
@@ -94,8 +105,9 @@ export class RefreshTokenUseCase {
     session.rotateRefreshToken(newRefreshToken, now);
     await this.sessionRepository.save(session);
 
+    const tenantId = await this.resolveOrProvisionTenantId(user);
     const accessToken = this.tokenProvider.signAccessToken(
-      { sub: user.id, sid: session.id, roles: user.roles },
+      { sub: user.id, sid: session.id, roles: user.roles, tenantId },
       this.config.accessTokenTtlSeconds,
     );
 
@@ -122,5 +134,33 @@ export class RefreshTokenUseCase {
       metadata,
     });
     await this.auditLogRepository.append(entry);
+  }
+
+  /** Mesma lógica de autocura de `LoginUseCase.resolveOrProvisionTenantId` — ver ADR 0037. */
+  private async resolveOrProvisionTenantId(user: User): Promise<string> {
+    const existente = await this.tenantResourceOwnershipRepository.findByResource("User", user.id);
+    if (existente) return existente.tenantId;
+
+    const nomeCandidato = resolveTenantCandidateName(user.empresa, user.email.toString(), user.id);
+    const slug = Tenant.slugify(nomeCandidato);
+
+    let tenant = await this.tenantRepository.findBySlug(slug);
+    if (!tenant) {
+      try {
+        tenant = await this.createTenantUseCase.execute({ nome: nomeCandidato, slug });
+      } catch (error) {
+        if (error instanceof AppError && error.kind === "CONFLICT") {
+          tenant = await this.tenantRepository.findBySlug(slug);
+        }
+        if (!tenant) throw error;
+      }
+    }
+
+    await this.registerTenantResourceUseCase.execute({
+      tenantId: tenant.id,
+      resourceType: "User",
+      resourceId: user.id,
+    });
+    return tenant.id;
   }
 }

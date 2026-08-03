@@ -43,4 +43,21 @@ describe("ResolveIdentityUseCase", () => {
 
     expect(results).toEqual([]);
   });
+
+  it("deduplica o mesmo candidato sugerido por mais de uma fonte", async () => {
+    const providerA = new FakeIdentityResolutionSourceProvider("INTERNAL", [
+      { id: "c1", sourceType: "INTERNAL", documento: "52998224725", nome: "Ana" },
+    ]);
+    const providerB = new FakeIdentityResolutionSourceProvider("INTERNAL", [
+      { id: "c1", sourceType: "INTERNAL", documento: "52998224725", nome: "Ana" },
+    ]);
+    const useCase = new ResolveIdentityUseCase(
+      [providerA, providerB],
+      new ExactDocumentMatchStrategy(),
+    );
+
+    const results = await useCase.execute({ documento: "52998224725", nome: null });
+
+    expect(results).toHaveLength(1);
+  });
 });

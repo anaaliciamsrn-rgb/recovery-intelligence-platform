@@ -7,7 +7,7 @@ export interface OAuthProfile {
  * Porta comum a qualquer provedor OAuth 2.0 / OIDC de "login social"
  * (Google, Microsoft Entra ID). Só é instanciada pelo container quando as
  * credenciais do provedor (`client id`/`secret`) estão presentes no
- * ambiente — ver `identity/container.ts` e ADR 0037. Sem isso, o provedor
+ * ambiente — ver `identity/container.ts` e docs/RELATORIO_AUTH_E_UX.md. Sem isso, o provedor
  * simplesmente não existe no container, e `GET /auth/oauth/providers`
  * reporta `false` para ele — nunca uma implementação que finge funcionar.
  */

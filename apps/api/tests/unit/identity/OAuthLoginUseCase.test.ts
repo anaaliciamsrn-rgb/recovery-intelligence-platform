@@ -1,11 +1,15 @@
 import { OAuthLoginUseCase } from "../../../src/modules/identity/application/use-cases/OAuthLoginUseCase.js";
 import { Email } from "../../../src/modules/identity/domain/value-objects/Email.js";
+import { CreateTenantUseCase } from "../../../src/modules/tenant/application/use-cases/CreateTenantUseCase.js";
+import { RegisterTenantResourceUseCase } from "../../../src/modules/tenant/application/use-cases/RegisterTenantResourceUseCase.js";
 import {
   FakeAuditLogRepository,
   FakeClock,
   FakeIdGenerator,
   FakePasswordHasher,
   FakeSessionRepository,
+  FakeTenantRepository,
+  FakeTenantResourceOwnershipRepository,
   FakeTokenHasher,
   FakeTokenProvider,
   FakeUserRepository,
@@ -23,6 +27,17 @@ function buildHarness() {
   const userRepository = new FakeUserRepository();
   const sessionRepository = new FakeSessionRepository();
   const auditLogRepository = new FakeAuditLogRepository();
+  const idGenerator = new FakeIdGenerator();
+  const clock = new FakeClock(NOW);
+  const tenantRepository = new FakeTenantRepository();
+  const tenantResourceOwnershipRepository = new FakeTenantResourceOwnershipRepository();
+  const createTenantUseCase = new CreateTenantUseCase(tenantRepository, idGenerator, clock);
+  const registerTenantResourceUseCase = new RegisterTenantResourceUseCase(
+    tenantRepository,
+    tenantResourceOwnershipRepository,
+    idGenerator,
+    clock,
+  );
 
   const useCase = new OAuthLoginUseCase(
     userRepository,
@@ -31,12 +46,16 @@ function buildHarness() {
     new FakePasswordHasher(),
     new FakeTokenProvider(),
     new FakeTokenHasher(),
-    new FakeIdGenerator(),
-    new FakeClock(NOW),
+    idGenerator,
+    clock,
     CONFIG,
+    tenantRepository,
+    createTenantUseCase,
+    registerTenantResourceUseCase,
+    tenantResourceOwnershipRepository,
   );
 
-  return { useCase, userRepository, auditLogRepository };
+  return { useCase, userRepository, auditLogRepository, tenantResourceOwnershipRepository };
 }
 
 describe("OAuthLoginUseCase", () => {

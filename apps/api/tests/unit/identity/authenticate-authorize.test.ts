@@ -56,7 +56,7 @@ describe("authenticateMiddleware", () => {
   it("popula req.auth e segue quando o token é válido", async () => {
     const { app, tokenProvider } = buildApp();
     const token = tokenProvider.signAccessToken(
-      { sub: "user-1", sid: "session-1", roles: ["VIEWER"] },
+      { sub: "user-1", sid: "session-1", roles: ["VIEWER"], tenantId: "tenant-1" },
       900,
     );
 
@@ -67,6 +67,7 @@ describe("authenticateMiddleware", () => {
       userId: "user-1",
       sessionId: "session-1",
       roles: ["VIEWER"],
+      tenantId: "tenant-1",
     });
   });
 });
@@ -75,7 +76,7 @@ describe("authorizeMiddleware", () => {
   it("responde 403 quando o papel não tem a permissão exigida", async () => {
     const { app, tokenProvider } = buildApp();
     const token = tokenProvider.signAccessToken(
-      { sub: "user-1", sid: "session-1", roles: ["VIEWER"] },
+      { sub: "user-1", sid: "session-1", roles: ["VIEWER"], tenantId: "tenant-1" },
       900,
     );
 
@@ -87,7 +88,7 @@ describe("authorizeMiddleware", () => {
   it("permite quando o papel tem a permissão exigida", async () => {
     const { app, tokenProvider } = buildApp();
     const token = tokenProvider.signAccessToken(
-      { sub: "user-1", sid: "session-1", roles: ["ADMIN"] },
+      { sub: "user-1", sid: "session-1", roles: ["ADMIN"], tenantId: "tenant-1" },
       900,
     );
 

@@ -25,9 +25,14 @@ export class JwtTokenProvider implements ITokenProvider {
       throw new Error("Payload do access token não é um objeto");
     }
 
-    const { sub, sid, roles } = decoded as Record<string, unknown>;
+    const { sub, sid, roles, tenantId } = decoded as Record<string, unknown>;
 
-    if (typeof sub !== "string" || typeof sid !== "string" || !Array.isArray(roles)) {
+    if (
+      typeof sub !== "string" ||
+      typeof sid !== "string" ||
+      !Array.isArray(roles) ||
+      typeof tenantId !== "string"
+    ) {
       throw new Error("Claims do access token em formato inesperado");
     }
 
@@ -35,6 +40,7 @@ export class JwtTokenProvider implements ITokenProvider {
       sub,
       sid,
       roles: roles.filter((role): role is string => typeof role === "string"),
+      tenantId,
     };
   }
 }

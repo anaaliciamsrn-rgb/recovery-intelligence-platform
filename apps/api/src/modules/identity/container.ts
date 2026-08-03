@@ -6,6 +6,10 @@ import { Argon2PasswordHasher } from "../../infrastructure/security/argon2-passw
 import { JwtTokenProvider } from "../../infrastructure/security/jwt-token-provider.js";
 import { createRateLimitMiddleware } from "../../presentation/http/middlewares/rate-limit.middleware.js";
 import type { Env } from "../../shared/config/env.js";
+import { CreateTenantUseCase } from "../tenant/application/use-cases/CreateTenantUseCase.js";
+import { RegisterTenantResourceUseCase } from "../tenant/application/use-cases/RegisterTenantResourceUseCase.js";
+import { PrismaTenantRepository } from "../tenant/infrastructure/persistence/PrismaTenantRepository.js";
+import { PrismaTenantResourceOwnershipRepository } from "../tenant/infrastructure/persistence/PrismaTenantResourceOwnershipRepository.js";
 import type { IdentityModuleConfig } from "./application/IdentityModuleConfig.js";
 import type { IOAuthProvider } from "./application/ports/IOAuthProvider.js";
 import { AssignUserRolesUseCase } from "./application/use-cases/AssignUserRolesUseCase.js";
@@ -87,8 +91,21 @@ export function buildIdentityModule(deps: IdentityModuleDependencies): IdentityM
   const auditLogRepository = new PrismaAuditLogRepository(prisma);
   const passwordResetTokenRepository = new PrismaPasswordResetTokenRepository(prisma);
 
+  // Duplicação deliberada das peças de `tenant` (mesmo padrão de todo o
+  // resto da plataforma, ver ADR 0037) — `identity` nunca importa a
+  // instância viva do container de `tenant`, só as classes.
+  const tenantRepository = new PrismaTenantRepository(prisma);
+  const tenantResourceOwnershipRepository = new PrismaTenantResourceOwnershipRepository(prisma);
+  const createTenantUseCase = new CreateTenantUseCase(tenantRepository, idGenerator, clock);
+  const registerTenantResourceUseCase = new RegisterTenantResourceUseCase(
+    tenantRepository,
+    tenantResourceOwnershipRepository,
+    idGenerator,
+    clock,
+  );
+
   // Sem SMTP_HOST configurado, cai no ConsoleEmailProvider — nunca falha
-  // silenciosamente, nunca finge enviar (ver ADR 0037).
+  // silenciosamente, nunca finge enviar (ver docs/RELATORIO_AUTH_E_UX.md).
   const emailProvider = env.SMTP_HOST
     ? new SMTPEmailProvider(
         {
@@ -114,6 +131,10 @@ export function buildIdentityModule(deps: IdentityModuleDependencies): IdentityM
     idGenerator,
     clock,
     config,
+    tenantRepository,
+    createTenantUseCase,
+    registerTenantResourceUseCase,
+    tenantResourceOwnershipRepository,
   );
 
   const refreshTokenUseCase = new RefreshTokenUseCase(
@@ -125,6 +146,10 @@ export function buildIdentityModule(deps: IdentityModuleDependencies): IdentityM
     idGenerator,
     clock,
     config,
+    tenantRepository,
+    createTenantUseCase,
+    registerTenantResourceUseCase,
+    tenantResourceOwnershipRepository,
   );
 
   const logoutUseCase = new LogoutUseCase(
@@ -158,6 +183,9 @@ export function buildIdentityModule(deps: IdentityModuleDependencies): IdentityM
     passwordHasher,
     idGenerator,
     clock,
+    tenantRepository,
+    createTenantUseCase,
+    registerTenantResourceUseCase,
   );
 
   const requestPasswordResetUseCase = new RequestPasswordResetUseCase(
@@ -240,6 +268,10 @@ export function buildIdentityModule(deps: IdentityModuleDependencies): IdentityM
     idGenerator,
     clock,
     config,
+    tenantRepository,
+    createTenantUseCase,
+    registerTenantResourceUseCase,
+    tenantResourceOwnershipRepository,
   );
 
   const cookieConfig = {

@@ -1,3 +1,4 @@
+import { AppError } from "../../../../application/errors/AppError.js";
 import type { IPasswordHasher } from "../../../../application/ports/IPasswordHasher.js";
 import type { ITokenProvider } from "../../../../application/ports/ITokenProvider.js";
 import { AuditLogEntry } from "../../domain/entities/AuditLogEntry.js";
@@ -11,7 +12,13 @@ import { Role } from "../../domain/value-objects/Role.js";
 import type { IAuditLogRepository } from "../../domain/repositories/IAuditLogRepository.js";
 import type { ISessionRepository } from "../../domain/repositories/ISessionRepository.js";
 import type { IUserRepository } from "../../domain/repositories/IUserRepository.js";
+import type { CreateTenantUseCase } from "../../../tenant/application/use-cases/CreateTenantUseCase.js";
+import type { RegisterTenantResourceUseCase } from "../../../tenant/application/use-cases/RegisterTenantResourceUseCase.js";
+import { Tenant } from "../../../tenant/domain/entities/Tenant.js";
+import type { ITenantRepository } from "../../../tenant/domain/repositories/ITenantRepository.js";
+import type { ITenantResourceOwnershipRepository } from "../../../tenant/domain/repositories/ITenantResourceOwnershipRepository.js";
 import type { IdentityModuleConfig } from "../IdentityModuleConfig.js";
+import { resolveTenantCandidateName } from "../resolveTenantCandidateName.js";
 import type { OAuthProfile } from "../ports/IOAuthProvider.js";
 import type { IClock } from "../ports/IClock.js";
 import type { IIdGenerator } from "../ports/IIdGenerator.js";
@@ -54,6 +61,10 @@ export class OAuthLoginUseCase {
     private readonly idGenerator: IIdGenerator,
     private readonly clock: IClock,
     private readonly config: IdentityModuleConfig,
+    private readonly tenantRepository: ITenantRepository,
+    private readonly createTenantUseCase: CreateTenantUseCase,
+    private readonly registerTenantResourceUseCase: RegisterTenantResourceUseCase,
+    private readonly tenantResourceOwnershipRepository: ITenantResourceOwnershipRepository,
   ) {}
 
   async execute(input: OAuthLoginInput): Promise<OAuthLoginOutput> {
@@ -61,6 +72,7 @@ export class OAuthLoginUseCase {
     const email = Email.create(input.profile.email);
 
     let user = await this.userRepository.findByEmail(email);
+    let tenantId: string;
     if (!user) {
       const randomSecret = this.idGenerator.generateSecureToken();
       const hash = await this.passwordHasher.hash(randomSecret);
@@ -81,6 +93,16 @@ export class OAuthLoginUseCase {
         updatedAt: now,
       });
       await this.userRepository.save(user);
+
+      const tenant = await this.resolveOrCreateTenant(null, email, user.id);
+      tenantId = tenant.id;
+      await this.registerTenantResourceUseCase.execute({
+        tenantId,
+        resourceType: "User",
+        resourceId: user.id,
+      });
+    } else {
+      tenantId = await this.resolveExistingTenantId(user.id, email, user.empresa);
     }
 
     user.recordSuccessfulLogin(now);
@@ -117,7 +139,7 @@ export class OAuthLoginUseCase {
     await this.sessionRepository.save(session);
 
     const accessToken = this.tokenProvider.signAccessToken(
-      { sub: user.id, sid: session.id, roles: user.roles },
+      { sub: user.id, sid: session.id, roles: user.roles, tenantId },
       this.config.accessTokenTtlSeconds,
     );
 
@@ -138,5 +160,51 @@ export class OAuthLoginUseCase {
       refreshToken: rawRefreshToken,
       user: { id: user.id, email: user.email.toString(), roles: user.roles },
     };
+  }
+
+  /** Perfis OAuth não trazem nome de empresa — usa o domínio do e-mail corporativo como candidato a tenant (mesma lógica de `RegisterUseCase`), exceto provedores de e-mail pessoal (ver `resolveTenantCandidateName`). */
+  private async resolveOrCreateTenant(
+    empresa: string | null,
+    email: Email,
+    userId: string,
+  ): Promise<Tenant> {
+    const nomeCandidato = resolveTenantCandidateName(empresa, email.toString(), userId);
+    const slug = Tenant.slugify(nomeCandidato);
+
+    const existente = await this.tenantRepository.findBySlug(slug);
+    if (existente) return existente;
+
+    try {
+      return await this.createTenantUseCase.execute({ nome: nomeCandidato, slug });
+    } catch (error) {
+      if (error instanceof AppError && error.kind === "CONFLICT") {
+        const criadoPorOutraRequisicao = await this.tenantRepository.findBySlug(slug);
+        if (criadoPorOutraRequisicao) return criadoPorOutraRequisicao;
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Autocura (mesmo espírito de `LoginUseCase.resolveOrProvisionTenantId`):
+   * uma conta OAuth que já existia antes do ADR 0037, ou inserida fora do
+   * fluxo normal, ganha um tenant na hora em vez de ficar impedida de
+   * logar.
+   */
+  private async resolveExistingTenantId(
+    userId: string,
+    email: Email,
+    empresa: string | null,
+  ): Promise<string> {
+    const ownership = await this.tenantResourceOwnershipRepository.findByResource("User", userId);
+    if (ownership) return ownership.tenantId;
+
+    const tenant = await this.resolveOrCreateTenant(empresa, email, userId);
+    await this.registerTenantResourceUseCase.execute({
+      tenantId: tenant.id,
+      resourceType: "User",
+      resourceId: userId,
+    });
+    return tenant.id;
   }
 }

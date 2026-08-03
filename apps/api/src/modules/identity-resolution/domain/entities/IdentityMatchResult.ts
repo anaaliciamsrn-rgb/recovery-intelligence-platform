@@ -6,6 +6,8 @@ import type { MatchSignal } from "../value-objects/MatchSignal.js";
 export interface IdentityMatchResultProps {
   candidateId: string;
   candidateSourceType: IdentitySourceType;
+  candidateNome: string;
+  candidateDocumento: string;
   confidenceScore: ConfidenceScore;
   decision: MatchDecision;
   signals: MatchSignal[];
@@ -29,6 +31,14 @@ export class IdentityMatchResult {
 
   get candidateSourceType(): IdentitySourceType {
     return this.props.candidateSourceType;
+  }
+
+  get candidateNome(): string {
+    return this.props.candidateNome;
+  }
+
+  get candidateDocumento(): string {
+    return this.props.candidateDocumento;
   }
 
   get confidenceScore(): ConfidenceScore {

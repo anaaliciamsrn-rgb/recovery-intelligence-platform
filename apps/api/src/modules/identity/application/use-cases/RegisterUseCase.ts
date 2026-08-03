@@ -9,6 +9,11 @@ import { PlainPassword } from "../../domain/value-objects/PlainPassword.js";
 import { Role } from "../../domain/value-objects/Role.js";
 import type { IAuditLogRepository } from "../../domain/repositories/IAuditLogRepository.js";
 import type { IUserRepository } from "../../domain/repositories/IUserRepository.js";
+import type { CreateTenantUseCase } from "../../../tenant/application/use-cases/CreateTenantUseCase.js";
+import type { RegisterTenantResourceUseCase } from "../../../tenant/application/use-cases/RegisterTenantResourceUseCase.js";
+import { Tenant } from "../../../tenant/domain/entities/Tenant.js";
+import type { ITenantRepository } from "../../../tenant/domain/repositories/ITenantRepository.js";
+import { resolveTenantCandidateName } from "../resolveTenantCandidateName.js";
 import type { IClock } from "../ports/IClock.js";
 import type { IIdGenerator } from "../ports/IIdGenerator.js";
 
@@ -44,6 +49,14 @@ export interface RegisterOutput {
  * Papel padrão é sempre `VIEWER` — autocadastro nunca concede um papel mais
  * privilegiado; elevar papel continua sendo uma operação administrativa
  * separada (fora de escopo, igual ao ADR 0010 original).
+ *
+ * **Multi-tenant (ADR 0037)**: todo autocadastro resolve ou cria um
+ * `Tenant` — pelo nome da empresa informado (`input.empresa`), ou pelo
+ * domínio do e-mail se o campo ficou vazio — e registra o novo `User` como
+ * recurso daquele tenant via `TenantResourceOwnership`. Duas pessoas que
+ * informam o mesmo nome de empresa (normalizado) caem no mesmo tenant de
+ * propósito: é assim que colegas da mesma empresa cliente compartilham a
+ * mesma carteira. Nenhum usuário nasce sem tenant.
  */
 export class RegisterUseCase {
   constructor(
@@ -52,6 +65,9 @@ export class RegisterUseCase {
     private readonly passwordHasher: IPasswordHasher,
     private readonly idGenerator: IIdGenerator,
     private readonly clock: IClock,
+    private readonly tenantRepository: ITenantRepository,
+    private readonly createTenantUseCase: CreateTenantUseCase,
+    private readonly registerTenantResourceUseCase: RegisterTenantResourceUseCase,
   ) {}
 
   async execute(input: RegisterInput): Promise<RegisterOutput> {
@@ -86,6 +102,14 @@ export class RegisterUseCase {
     });
 
     await this.userRepository.save(user);
+
+    const tenant = await this.resolveOrCreateTenant(input.empresa, email, user.id);
+    await this.registerTenantResourceUseCase.execute({
+      tenantId: tenant.id,
+      resourceType: "User",
+      resourceId: user.id,
+    });
+
     await this.appendAudit(user.id, "REGISTER_SUCCESS", "SUCCESS", input);
 
     return {
@@ -95,6 +119,34 @@ export class RegisterUseCase {
       sobrenome: user.sobrenome,
       roles: user.roles,
     };
+  }
+
+  /**
+   * Nunca cria um tenant duplicado para o mesmo nome normalizado: tenta
+   * encontrar pelo slug antes de criar, e trata `CONFLICT` (corrida entre
+   * dois cadastros simultâneos da mesma empresa) buscando de novo em vez de
+   * propagar o erro ao usuário.
+   */
+  private async resolveOrCreateTenant(
+    empresa: string | null,
+    email: Email,
+    userId: string,
+  ): Promise<Tenant> {
+    const nomeCandidato = resolveTenantCandidateName(empresa, email.toString(), userId);
+    const slug = Tenant.slugify(nomeCandidato);
+
+    const existente = await this.tenantRepository.findBySlug(slug);
+    if (existente) return existente;
+
+    try {
+      return await this.createTenantUseCase.execute({ nome: nomeCandidato, slug });
+    } catch (error) {
+      if (error instanceof AppError && error.kind === "CONFLICT") {
+        const criadoPorOutraRequisicao = await this.tenantRepository.findBySlug(slug);
+        if (criadoPorOutraRequisicao) return criadoPorOutraRequisicao;
+      }
+      throw error;
+    }
   }
 
   private async appendAudit(

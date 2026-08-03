@@ -9,6 +9,14 @@ export interface AccessTokenClaims {
   /** sessionId */
   sid: string;
   roles: string[];
+  /**
+   * Tenant do usuário — resolvido em `identity` via `TenantResourceOwnership`
+   * (módulo `tenant`, ver ADR 0037), nunca vindo de input do chamador. Todo
+   * usuário tem exatamente um tenant desde o autocadastro; ausência aqui
+   * (contas herdadas de antes desta fase) é tratada como erro pelo módulo
+   * que emite o token, não pelos módulos que só leem `req.auth.tenantId`.
+   */
+  tenantId: string;
 }
 
 /**

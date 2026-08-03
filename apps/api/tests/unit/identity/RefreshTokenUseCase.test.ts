@@ -4,11 +4,16 @@ import { Session } from "../../../src/modules/identity/domain/entities/Session.j
 import { User } from "../../../src/modules/identity/domain/entities/User.js";
 import { Email } from "../../../src/modules/identity/domain/value-objects/Email.js";
 import { PasswordHash } from "../../../src/modules/identity/domain/value-objects/PasswordHash.js";
+import { CreateTenantUseCase } from "../../../src/modules/tenant/application/use-cases/CreateTenantUseCase.js";
+import { RegisterTenantResourceUseCase } from "../../../src/modules/tenant/application/use-cases/RegisterTenantResourceUseCase.js";
+import { TenantResourceOwnership } from "../../../src/modules/tenant/domain/entities/TenantResourceOwnership.js";
 import {
   FakeAuditLogRepository,
   FakeClock,
   FakeIdGenerator,
   FakeSessionRepository,
+  FakeTenantRepository,
+  FakeTenantResourceOwnershipRepository,
   FakeTokenHasher,
   FakeTokenProvider,
   FakeUserRepository,
@@ -69,6 +74,25 @@ async function buildHarness() {
   });
   await sessionRepository.save(session);
 
+  const tenantRepository = new FakeTenantRepository();
+  const tenantResourceOwnershipRepository = new FakeTenantResourceOwnershipRepository();
+  tenantResourceOwnershipRepository.seed(
+    TenantResourceOwnership.create({
+      id: "ownership-1",
+      tenantId: "tenant-1",
+      resourceType: "User",
+      resourceId: user.id,
+      createdAt: NOW,
+    }),
+  );
+  const createTenantUseCase = new CreateTenantUseCase(tenantRepository, idGenerator, clock);
+  const registerTenantResourceUseCase = new RegisterTenantResourceUseCase(
+    tenantRepository,
+    tenantResourceOwnershipRepository,
+    idGenerator,
+    clock,
+  );
+
   const useCase = new RefreshTokenUseCase(
     sessionRepository,
     userRepository,
@@ -78,6 +102,10 @@ async function buildHarness() {
     idGenerator,
     clock,
     CONFIG,
+    tenantRepository,
+    createTenantUseCase,
+    registerTenantResourceUseCase,
+    tenantResourceOwnershipRepository,
   );
 
   return { useCase, sessionRepository, auditLogRepository, initialRawToken };
