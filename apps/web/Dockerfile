@@ -11,8 +11,7 @@ RUN corepack enable
 # populado apaga os symlinks do pnpm. Padrão oficial: https://pnpm.io/docker ----
 FROM base AS build
 COPY . .
-RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
-    pnpm install --frozen-lockfile --filter @rip/web...
+RUN pnpm install --frozen-lockfile --filter @rip/web...
 # Vite embute VITE_* no bundle em tempo de build (nunca em runtime) — por
 # isso precisa ser ARG aqui, não uma env do container final. Plataformas como
 # Railway populam automaticamente um ARG que tenha o mesmo nome de uma

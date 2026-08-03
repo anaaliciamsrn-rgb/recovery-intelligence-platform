@@ -21,8 +21,7 @@ RUN corepack enable
 # pnpm para Docker (https://pnpm.io/docker). Ver ADR correspondente. ----
 FROM base AS build
 COPY . .
-RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
-    pnpm install --frozen-lockfile --filter @rip/api...
+RUN pnpm install --frozen-lockfile --filter @rip/api...
 RUN pnpm --filter @rip/api prisma:generate
 RUN pnpm --filter @rip/api build
 # --legacy: workspace usa symlinks (modo padrão), não injectWorkspacePackages.
