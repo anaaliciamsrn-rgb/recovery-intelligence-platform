@@ -20,6 +20,13 @@ export interface TemporalDataPoint {
   totalVersoes: number;
 }
 
+export interface RiskEntityEntry {
+  dossieId: string;
+  nome: string;
+  riskScore: number;
+  classificacao: string;
+}
+
 /**
  * KPIs agregados de toda a carteira — computados sobre a versão mais
  * recente de cada Dossiê já versionado (dossier-versioning, ADR 0022),
@@ -37,4 +44,8 @@ export interface AnalyticsSummary {
   fatoresMaisFrequentes: FactorCount[];
   metricasPorFonte: SourceMetric[];
   evolucaoTemporal: TemporalDataPoint[];
+  /** Top 5 por `riskScore` desc, só entre Dossiês cujo nome do sujeito pôde ser resolvido — ver ADR 0037. */
+  empresasEmMaiorRisco: RiskEntityEntry[];
+  /** Alertas derivados de contagens reais (nunca texto fixo/decorativo) — ver ADR 0037. */
+  alertas: string[];
 }

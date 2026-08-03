@@ -3,9 +3,12 @@ import type {
   AnalyticsSummary,
   ChannelCount,
   FactorCount,
+  RiskEntityEntry,
   SourceMetric,
   TemporalDataPoint,
 } from "../value-objects/AnalyticsSummary.js";
+
+const TOP_N_MAIOR_RISCO = 5;
 
 const FONTES: (keyof VersionSnapshot["evidencias"])[] = [
   "pgfn",
@@ -38,7 +41,12 @@ export class AnalyticsSummaryBuilder {
   static build(
     snapshotsAtuais: VersionSnapshot[],
     todasAsVersoes: VersionSnapshot[],
-    totais: { pessoas: number; empresas: number; importacoes: number },
+    totais: {
+      pessoas: number;
+      empresas: number;
+      importacoes: number;
+      nomePorDossieId: Map<string, string>;
+    },
   ): AnalyticsSummary {
     const distribuicaoRisco: Record<string, number> = {};
     const canaisPorNome = new Map<string, number>();
@@ -91,7 +99,56 @@ export class AnalyticsSummaryBuilder {
       fatoresMaisFrequentes,
       metricasPorFonte,
       evolucaoTemporal: this.evolucaoTemporal(todasAsVersoes),
+      empresasEmMaiorRisco: this.empresasEmMaiorRisco(snapshotsAtuais, totais.nomePorDossieId),
+      alertas: this.alertas(snapshotsAtuais, distribuicaoRisco),
     };
+  }
+
+  private static empresasEmMaiorRisco(
+    snapshotsAtuais: VersionSnapshot[],
+    nomePorDossieId: Map<string, string>,
+  ): RiskEntityEntry[] {
+    return snapshotsAtuais
+      .filter((snapshot) => nomePorDossieId.has(snapshot.dossieId))
+      .sort((a, b) => b.riskScore - a.riskScore)
+      .slice(0, TOP_N_MAIOR_RISCO)
+      .map((snapshot) => ({
+        dossieId: snapshot.dossieId,
+        nome: nomePorDossieId.get(snapshot.dossieId)!,
+        riskScore: snapshot.riskScore,
+        classificacao: snapshot.classificacao,
+      }));
+  }
+
+  /** Cada alerta é derivado de uma contagem real sobre `snapshotsAtuais` — nunca texto fixo/decorativo. Ver ADR 0037. */
+  private static alertas(
+    snapshotsAtuais: VersionSnapshot[],
+    distribuicaoRisco: Record<string, number>,
+  ): string[] {
+    const alertas: string[] = [];
+
+    const altoRisco = distribuicaoRisco["ALTO_RISCO"] ?? 0;
+    if (altoRisco > 0) {
+      alertas.push(
+        `${altoRisco} empresa(s) classificada(s) como ALTO_RISCO — revisão recomendada.`,
+      );
+    }
+
+    const comSancao = snapshotsAtuais.filter(
+      (snapshot) => snapshot.evidencias.portalTransparencia.status === "ENCONTRADO",
+    ).length;
+    if (comSancao > 0) {
+      alertas.push(`${comSancao} empresa(s) com sanção ativa no Portal da Transparência.`);
+    }
+
+    const comProtesto = snapshotsAtuais.filter(
+      (snapshot) => snapshot.evidencias.cenprot.status === "ENCONTRADO",
+    ).length;
+    if (comProtesto > 0) {
+      alertas.push(`${comProtesto} empresa(s) com protesto registrado no CENPROT.`);
+    }
+
+    return alertas;
   }
 
   private static evolucaoTemporal(todasAsVersoes: VersionSnapshot[]): TemporalDataPoint[] {

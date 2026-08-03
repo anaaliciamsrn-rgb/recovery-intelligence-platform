@@ -80,6 +80,7 @@ describe("AnalyticsSummaryBuilder", () => {
       pessoas: 10,
       empresas: 5,
       importacoes: 2,
+      nomePorDossieId: new Map(),
     });
 
     expect(resumo.totalPessoas).toBe(10);
@@ -105,6 +106,7 @@ describe("AnalyticsSummaryBuilder", () => {
       pessoas: 0,
       empresas: 0,
       importacoes: 0,
+      nomePorDossieId: new Map(),
     });
 
     expect(resumo.metricasPorFonte.find((m) => m.fonte === "pgfn")?.percentualRespondida).toBe(50);
@@ -131,6 +133,7 @@ describe("AnalyticsSummaryBuilder", () => {
       pessoas: 0,
       empresas: 0,
       importacoes: 0,
+      nomePorDossieId: new Map(),
     });
 
     expect(resumo.evolucaoTemporal).toEqual([
@@ -144,6 +147,7 @@ describe("AnalyticsSummaryBuilder", () => {
       pessoas: 0,
       empresas: 0,
       importacoes: 0,
+      nomePorDossieId: new Map(),
     });
 
     expect(resumo.scoreMedio).toBe(0);
